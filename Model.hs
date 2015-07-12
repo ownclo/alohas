@@ -12,9 +12,9 @@ import Data.Maybe( maybeToList )
 data ModelState = ModelState {
         _forwChannel :: ForwChannel,
         _backChannel :: BackChannel,
-        _station :: Station,
-        _users :: [User],
-        _stats :: Stats
+        _station     :: Station,
+        _users       :: [User],
+        _stats       :: Stats
     } deriving Show
 
 data ForwChannel = ForwChannel
@@ -27,17 +27,25 @@ data Station = Station
   deriving Show
 
 data User = User {
-        _msgQueue :: [ForwMsg],
-        _generateMsg :: [Bool]
+        _msgQueue    :: [ForwMsg],
+        _generateMsg :: [Bool],
+        _transmit    :: Bool  -- is attempting to transmit
     } deriving Show
 
-data Stats = Stats
-  deriving Show
+data Stats = Stats {
+        _history :: [MsgResult]
+    } deriving Show
 
 data ForwMsg = ForwMsg
   deriving Show
 
+data MsgResult = Empty
+               | Success
+               | Conflict
+               deriving Show
+
 makeLenses ''User
+makeLenses ''Stats
 makeLenses ''ModelState
 
 type Model = State ModelState
@@ -48,26 +56,32 @@ initModel n = ModelState {
         _backChannel = BackChannel,
         _station = Station,
         _users = replicate n $ initUser (repeat True),
-        _stats = Stats
+        _stats = Stats []
     }
 
 initUser :: [Bool] -> User
 initUser msgGen = User {
         _msgQueue = [],
-        _generateMsg = msgGen
+        _generateMsg = msgGen,
+        _transmit = False
     }
 
 runModel :: Int -> Int -> ModelState
 runModel nsteps nusers = execState steps $ initModel nusers
     where steps = replicateM_ nsteps stepModel
 
+-- TODO: get the initial generator; trim to nsteps; replace generateMsg
+showModel :: ModelState -> ModelState
+showModel = users.traversed.generateMsg .~ []
+
 stepModel :: Model ()
-stepModel = do
-    msgs <- stepUsersBefore
-    stepForwChannel
-    stepStation
-    stepBackChannel
-    stepUsersAfter
+stepModel =
+        stepUsersBefore
+    >>= stepForwChannel
+    >>= stepStation
+    >>= stepStatistics
+    >>= stepBackChannel
+    >>= stepUsersAfter
 
 stepUsersBefore :: Model [ForwMsg]
 stepUsersBefore = zoom (users.traversed) $ maybeToList <$> stepUserBefore
@@ -81,35 +95,63 @@ stepUserBefore = do
               _ -> error "msgQueue size greater than one"
     willTransmit <- case mmsg of
                       Nothing -> return False
-                      Just msg -> maybeTransmitMsg
+                      Just _ -> maybeTransmitMsg
+    transmit .= willTransmit
     return $ if willTransmit then mmsg else Nothing
 
 
 maybeGenerateMsg :: State User (Maybe ForwMsg)
 maybeGenerateMsg = do
     willGenerate <- roll generateMsg
-    return $ if willGenerate then Just ForwMsg else Nothing
+    if willGenerate then do
+        let msg = ForwMsg
+        append msgQueue msg
+        return $ Just msg
+    else return Nothing
 
 roll :: MonadState s m => Lens' s [a] -> m a
-roll lens = do
-    x:xs <- use lens
-    lens .= xs
+roll alens = do
+    x:xs <- use alens
+    alens .= xs
     return x
+
+append :: MonadState s m => Lens' s [a] -> a -> m ()
+append alens val = alens <>= [val]
 
 maybeTransmitMsg :: State User Bool
 maybeTransmitMsg = return True
 
-stepForwChannel :: Model ()
-stepForwChannel = undefined
+stepForwChannel :: [ForwMsg] -> Model [ForwMsg]
+stepForwChannel = zoom forwChannel . return
 
-stepStation :: Model ()
-stepStation = undefined
+stepStation :: [ForwMsg] -> Model MsgResult
+stepStation = zoom station . stepStation'
 
-stepBackChannel :: Model ()
-stepBackChannel = undefined
+stepStation' :: [ForwMsg] -> State Station MsgResult
+stepStation' = return . recvMsgs
 
-stepUsersAfter :: Model ()
-stepUsersAfter = undefined
+recvMsgs :: [ForwMsg] -> MsgResult
+recvMsgs []  = Empty
+recvMsgs [_] = Success
+recvMsgs _   = Conflict
+
+stepStatistics :: MsgResult -> Model MsgResult
+stepStatistics = zoom stats . stepStats
+    where stepStats res = append history res  -- history %= (res:)
+                       >> return res
+
+stepBackChannel :: MsgResult -> Model MsgResult
+stepBackChannel = zoom backChannel . return
+
+stepUsersAfter :: MsgResult -> Model ()
+stepUsersAfter = zoom (users.traversed) . stepUserAfter
+
+stepUserAfter :: MsgResult -> State User ()
+stepUserAfter Empty = return ()
+stepUserAfter Conflict = return ()
+stepUserAfter Success = do
+        wasTransmit <- use transmit
+        when wasTransmit $ msgQueue %= tail
 
 main :: IO ()
-main = print $ runModel 1 1
+main = print . showModel $ runModel 2 2
