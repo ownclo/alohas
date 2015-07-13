@@ -8,7 +8,13 @@ import Control.Lens
 
 import Data.Maybe( maybeToList )
 
-import User( User, initUser, stepUserBefore, stepUserAfter, cleanUser )
+import User( User
+           , UserParams
+           , initUser
+           , stepUserBefore
+           , stepUserAfter
+           , cleanUser
+           )
 import Interface( ForwMsg(..), MsgResult(..) )
 import Common( append )
 
@@ -38,31 +44,33 @@ makeLenses ''ModelState
 
 type Model = State ModelState
 
-initModel :: Int -> ModelState
-initModel n = ModelState {
+initModel :: [User] -> ModelState
+initModel usrs = ModelState {
         _forwChannel = ForwChannel,
         _backChannel = BackChannel,
         _station = Station,
-        _users = replicate n $ initUser (repeat True),
+        _users = usrs,
         _stats = Stats []
     }
 
-runModel :: Int -> Int -> ModelState
-runModel nsteps nusers = execState steps $ initModel nusers
+runModel :: Int -> [User] -> ModelState
+runModel nsteps usrs = execState steps $ initModel usrs
     where steps = replicateM_ nsteps stepModel
 
--- TODO: get the initial generator; trim to nsteps; replace generateMsg
-showModel :: ModelState -> ModelState
-showModel = users.traversed %~ cleanUser
+presentModel :: Int -> [UserParams] -> ModelState -> ModelState
+presentModel nsteps userParams model = model & users .~ newUsers
+    where newUsers = map cleanUser' uparams
+          uparams = zip userParams usrs
+          usrs = model ^. users
+          cleanUser' = uncurry $ cleanUser nsteps
 
 stepModel :: Model ()
-stepModel =
-        stepUsersBefore
-    >>= stepForwChannel
-    >>= stepStation
-    >>= stepStatistics
-    >>= stepBackChannel
-    >>= stepUsersAfter
+stepModel = stepUsersBefore
+        >>= stepForwChannel
+        >>= stepStation
+        >>= stepStatistics
+        >>= stepBackChannel
+        >>= stepUsersAfter
 
 stepUsersBefore :: Model [ForwMsg]
 stepUsersBefore = zoom (users.traversed) $ maybeToList <$> stepUserBefore
@@ -93,4 +101,13 @@ stepUsersAfter :: MsgResult -> Model ()
 stepUsersAfter = zoom (users.traversed) . stepUserAfter
 
 main :: IO ()
-main = print . showModel $ runModel 2 2
+main = do
+        print $ model^.stats
+        mapM_ print $ model^.users
+    where model = presentModel nsteps userParams $ runModel nsteps usrs
+          usrs = map initUser userParams
+          nsteps = 2
+          userParams =
+            [ (repeat True, [True, False, True])
+            , (repeat True, [False, True, False])
+            ]

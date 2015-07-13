@@ -2,6 +2,7 @@
 
 module User
     ( User
+    , UserParams
     , initUser
     , stepUserBefore
     , stepUserAfter
@@ -17,15 +18,19 @@ import Common( roll, append )
 data User = User {
         _msgQueue    :: [ForwMsg],
         _generateMsg :: [Bool],
+        _transmitMsg :: [Bool],
         _transmit    :: Bool  -- is attempting to transmit
     } deriving Show
 
 makeLenses ''User
 
-initUser :: [Bool] -> User
-initUser msgGen = User {
+type UserParams = ([Bool], [Bool])
+
+initUser :: UserParams -> User
+initUser (msgGen, transmitGen) = User {
         _msgQueue = [],
         _generateMsg = msgGen,
+        _transmitMsg = transmitGen,
         _transmit = False
     }
 
@@ -52,7 +57,7 @@ maybeGenerateMsg = do
     else return Nothing
 
 maybeTransmitMsg :: State User Bool
-maybeTransmitMsg = return True
+maybeTransmitMsg = roll transmitMsg
 
 stepUserAfter :: MsgResult -> State User ()
 stepUserAfter Empty = return ()
@@ -61,6 +66,8 @@ stepUserAfter Success = do
         wasTransmit <- use transmit
         when wasTransmit $ msgQueue %= tail
 
--- TODO: get the initial generator; trim to nsteps; replace generateMsg
-cleanUser :: User -> User
-cleanUser = generateMsg .~ []
+cleanUser :: Int -> UserParams -> User -> User
+cleanUser nsteps (msgGen, transmitGen) = (transmitMsg .~ tG)
+                                       . (generateMsg .~ mG)
+    where tG = take nsteps transmitGen
+          mG = take nsteps msgGen
