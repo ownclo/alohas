@@ -6,4 +6,4 @@ data ForwMsg = ForwMsg
 data MsgResult = Empty
                | Success
                | Conflict
-               deriving Show
+               deriving (Eq, Show)

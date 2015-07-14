@@ -1,22 +1,19 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Model where
-
-import Control.Monad.State
 import Control.Applicative
+import Control.Arrow( (***) )
+import Control.Monad.State.Strict
 import Control.Lens
 
 import Data.Maybe( maybeToList )
 
-import User( User
-           , UserParams
-           , initUser
-           , stepUserBefore
-           , stepUserAfter
-           , cleanUser
-           )
+import System.Environment( getArgs )
+import System.Random( newStdGen, split )
+
+import User
 import Interface( ForwMsg(..), MsgResult(..) )
-import Common( append )
+import Common( append, mean )
+import Random( randomBools )
 
 data ModelState = ModelState {
         _forwChannel :: ForwChannel,
@@ -102,12 +99,16 @@ stepUsersAfter = zoom (users.traversed) . stepUserAfter
 
 main :: IO ()
 main = do
-        print $ model^.stats
-        mapM_ print $ model^.users
-    where model = presentModel nsteps userParams $ runModel nsteps usrs
-          usrs = map initUser userParams
-          nsteps = 2
-          userParams =
-            [ (repeat True, [True, False, True])
-            , (repeat True, [False, True, False])
-            ]
+        nsteps <- read . head <$> getArgs
+        gens <- map split <$> replicateM nusers newStdGen
+        let userParams = map (gens' y p) gens
+            gens' y p = randomBools y *** randomBools p
+            usrs = map initUser userParams
+            model = presentModel nsteps userParams $ runModel nsteps usrs
+        print . mean . map meanDelay $ model^.users
+--         print $ model^.stats
+--         mapM_ print $ model^.users
+        return ()
+    where nusers = 2
+          y = 1.0
+          p = 1.0 / fromIntegral nusers

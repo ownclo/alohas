@@ -7,19 +7,23 @@ module User
     , stepUserBefore
     , stepUserAfter
     , cleanUser
+    , meanDelay
     ) where
 
 import Control.Lens
-import Control.Monad.State
+import Control.Monad.State.Strict
 
 import Interface( ForwMsg(..), MsgResult(..) )
-import Common( roll, append )
+import Common( roll, append, mean )
 
 data User = User {
         _msgQueue    :: [ForwMsg],
         _generateMsg :: [Bool],
         _transmitMsg :: [Bool],
-        _transmit    :: Bool  -- is attempting to transmit
+        _transmit    :: Bool,  -- is attempting to transmit
+        _delays      :: Int,
+        _numDelays   :: Int,
+        _curDelay    :: Int
     } deriving Show
 
 makeLenses ''User
@@ -31,7 +35,10 @@ initUser (msgGen, transmitGen) = User {
         _msgQueue = [],
         _generateMsg = msgGen,
         _transmitMsg = transmitGen,
-        _transmit = False
+        _transmit = False,
+        _delays = 0,
+        _numDelays = 0,
+        _curDelay = 0
     }
 
 stepUserBefore :: State User (Maybe ForwMsg)
@@ -53,6 +60,7 @@ maybeGenerateMsg = do
     if willGenerate then do
         let msg = ForwMsg
         append msgQueue msg
+        curDelay .= 0
         return $ Just msg
     else return Nothing
 
@@ -60,14 +68,24 @@ maybeTransmitMsg :: State User Bool
 maybeTransmitMsg = roll transmitMsg
 
 stepUserAfter :: MsgResult -> State User ()
-stepUserAfter Empty = return ()
-stepUserAfter Conflict = return ()
-stepUserAfter Success = do
+stepUserAfter result = do
+    curDelay += 1
+    when (result == Success) $ do
         wasTransmit <- use transmit
-        when wasTransmit $ msgQueue %= tail
+        when wasTransmit $ do
+            cDelay <- use curDelay
+            delays += cDelay
+            numDelays += 1
+            msgQueue %= tail
 
 cleanUser :: Int -> UserParams -> User -> User
 cleanUser nsteps (msgGen, transmitGen) = (transmitMsg .~ tG)
                                        . (generateMsg .~ mG)
     where tG = take nsteps transmitGen
           mG = take nsteps msgGen
+
+meanDelay :: User -> Double
+meanDelay User{ _numDelays = 0 } = 0
+meanDelay u = dlays / ndelays
+    where dlays = fromIntegral $ view delays u
+          ndelays = fromIntegral $ view numDelays u
