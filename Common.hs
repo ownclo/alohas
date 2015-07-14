@@ -18,3 +18,7 @@ append alens val = alens <>= [val]
 
 mean :: (Real a, Fractional b) => [a] -> b
 mean l = realToFrac (sum l) / genericLength l
+
+whenMaybe :: Monad m => Maybe a -> (a -> m ()) -> m ()
+whenMaybe Nothing  _   = return ()
+whenMaybe (Just x) a = a x

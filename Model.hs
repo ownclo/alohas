@@ -7,7 +7,7 @@ import Control.Lens
 
 import Data.Maybe( maybeToList )
 
-import System.Environment( getArgs )
+-- import System.Environment( getArgs )
 import System.Random( newStdGen, split )
 
 import User
@@ -98,17 +98,18 @@ stepUsersAfter :: MsgResult -> Model ()
 stepUsersAfter = zoom (users.traversed) . stepUserAfter
 
 main :: IO ()
-main = do
-        nsteps <- read . head <$> getArgs
+main = forM_ [0.01, 0.02 .. 1.0] $ \y -> do
+--         nsteps <- read . head <$> getArgs
         gens <- map split <$> replicateM nusers newStdGen
-        let userParams = map (gens' y p) gens
-            gens' y p = randomBools y *** randomBools p
+        let userParams = map rstreams gens
+            rstreams = randomBools y *** randomBools p
             usrs = map initUser userParams
             model = presentModel nsteps userParams $ runModel nsteps usrs
-        print . mean . map meanDelay $ model^.users
+            mDelay = mean . map meanDelay $ model^.users
+        putStrLn $ show y ++ "\t" ++ show (mDelay :: Double)
 --         print $ model^.stats
 --         mapM_ print $ model^.users
         return ()
     where nusers = 2
-          y = 1.0
+          nsteps = 100000
           p = 1.0 / fromIntegral nusers

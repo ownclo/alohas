@@ -14,7 +14,7 @@ import Control.Lens
 import Control.Monad.State.Strict
 
 import Interface( ForwMsg(..), MsgResult(..) )
-import Common( roll, append, mean )
+import Common( roll, append )
 
 data User = User {
         _msgQueue    :: [ForwMsg],
@@ -22,7 +22,7 @@ data User = User {
         _transmitMsg :: [Bool],
         _transmit    :: Bool,  -- is attempting to transmit
         _delays      :: Int,
-        _numDelays   :: Int,
+        _numMsgs   :: Int,
         _curDelay    :: Int
     } deriving Show
 
@@ -37,7 +37,7 @@ initUser (msgGen, transmitGen) = User {
         _transmitMsg = transmitGen,
         _transmit = False,
         _delays = 0,
-        _numDelays = 0,
+        _numMsgs = 0,
         _curDelay = 0
     }
 
@@ -70,13 +70,12 @@ maybeTransmitMsg = roll transmitMsg
 stepUserAfter :: MsgResult -> State User ()
 stepUserAfter result = do
     curDelay += 1
-    when (result == Success) $ do
-        wasTransmit <- use transmit
-        when wasTransmit $ do
-            cDelay <- use curDelay
-            delays += cDelay
-            numDelays += 1
-            msgQueue %= tail
+    wasTransmit <- use transmit
+    when (result == Success && wasTransmit) $ do
+        cDelay <- use curDelay
+        delays += cDelay
+        numMsgs += 1
+        msgQueue %= tail
 
 cleanUser :: Int -> UserParams -> User -> User
 cleanUser nsteps (msgGen, transmitGen) = (transmitMsg .~ tG)
@@ -85,7 +84,7 @@ cleanUser nsteps (msgGen, transmitGen) = (transmitMsg .~ tG)
           mG = take nsteps msgGen
 
 meanDelay :: User -> Double
-meanDelay User{ _numDelays = 0 } = 0
-meanDelay u = dlays / ndelays
+meanDelay User{ _numMsgs = 0 } = 0
+meanDelay u = dlays / nmsgs
     where dlays = fromIntegral $ view delays u
-          ndelays = fromIntegral $ view numDelays u
+          nmsgs = fromIntegral $ view numMsgs u
