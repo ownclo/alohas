@@ -53,6 +53,7 @@ maybeTransmit [] = transmit .= False >> return Nothing
 maybeTransmit [msg] = do
     willTransmit <- maybeTransmitMsg
     transmit .= willTransmit
+    curDelay += 1
     return $ if willTransmit then Just msg else Nothing
 maybeTransmit _ = error "msgQueue size greater than one"
 
@@ -70,7 +71,6 @@ maybeTransmitMsg = roll transmitMsg
 
 stepUserAfter :: MsgResult -> State User ()
 stepUserAfter result = do
-    curDelay += 1
     wasTransmit <- use transmit
     when (result == Success && wasTransmit) $ do
         cDelay <- use curDelay
