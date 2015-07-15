@@ -12,7 +12,7 @@ import System.Random( newStdGen, split )
 
 import User
 import Interface( ForwMsg(..), MsgResult(..) )
-import Common( append, mean )
+import Common( append )
 import Random( randomBools )
 
 data ModelState = ModelState {
@@ -105,7 +105,7 @@ main = forM_ [0.01, 0.02 .. 1.0] $ \y -> do
             rstreams = randomBools y *** randomBools p
             usrs = map initUser userParams
             model = presentModel nsteps userParams $ runModel nsteps usrs
-            mDelay = mean . map meanDelay $ model^.users
+            mDelay = meanDelay $ model^.users
         putStrLn $ show y ++ "\t" ++ show (mDelay :: Double)
 --         print $ model^.stats
 --         mapM_ print $ model^.users

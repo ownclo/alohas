@@ -10,6 +10,7 @@ module User
     , meanDelay
     ) where
 
+import Control.Applicative
 import Control.Lens
 import Control.Monad.State.Strict
 
@@ -22,7 +23,7 @@ data User = User {
         _transmitMsg :: [Bool],
         _transmit    :: Bool,  -- is attempting to transmit
         _delays      :: Int,
-        _numMsgs   :: Int,
+        _numMsgs     :: Int,
         _curDelay    :: Int
     } deriving Show
 
@@ -43,26 +44,26 @@ initUser (msgGen, transmitGen) = User {
 
 stepUserBefore :: State User (Maybe ForwMsg)
 stepUserBefore = do
-    msgQ <- use msgQueue
-    mmsg <- case msgQ of
-              [] -> maybeGenerateMsg
-              [msg] -> return $ Just msg
-              _ -> error "msgQueue size greater than one"
-    willTransmit <- case mmsg of
-                      Nothing -> return False
-                      Just _ -> maybeTransmitMsg
-    transmit .= willTransmit
-    return $ if willTransmit then mmsg else Nothing
+    mmsg <- maybeTransmit =<< use msgQueue
+    maybeGenerateMsg
+    return mmsg
 
-maybeGenerateMsg :: State User (Maybe ForwMsg)
+maybeTransmit :: [ForwMsg] -> State User (Maybe ForwMsg)
+maybeTransmit [] = transmit .= False >> return Nothing
+maybeTransmit [msg] = do
+    willTransmit <- maybeTransmitMsg
+    transmit .= willTransmit
+    return $ if willTransmit then Just msg else Nothing
+maybeTransmit _ = error "msgQueue size greater than one"
+
+maybeGenerateMsg :: State User ()
 maybeGenerateMsg = do
-    willGenerate <- roll generateMsg
-    if willGenerate then do
-        let msg = ForwMsg
-        append msgQueue msg
-        curDelay .= 0
-        return $ Just msg
-    else return Nothing
+    qsize <- length <$> use msgQueue
+    when (qsize < 1) $ do
+        willGenerate <- roll generateMsg
+        when willGenerate $ do
+            append msgQueue ForwMsg
+            curDelay .= 0
 
 maybeTransmitMsg :: State User Bool
 maybeTransmitMsg = roll transmitMsg
@@ -83,8 +84,7 @@ cleanUser nsteps (msgGen, transmitGen) = (transmitMsg .~ tG)
     where tG = take nsteps transmitGen
           mG = take nsteps msgGen
 
-meanDelay :: User -> Double
-meanDelay User{ _numMsgs = 0 } = 0
-meanDelay u = dlays / nmsgs
-    where dlays = fromIntegral $ view delays u
-          nmsgs = fromIntegral $ view numMsgs u
+meanDelay :: [User] -> Double
+meanDelay us = if nmsgs /= 0 then dlays / nmsgs else 0
+    where dlays = sum $ map (fromIntegral . view delays) us
+          nmsgs = sum $ map (fromIntegral . view numMsgs) us
