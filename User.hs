@@ -17,10 +17,18 @@ import Control.Monad.State.Strict
 import Interface( ForwMsg(..), MsgResult(..) )
 import Common( roll, append )
 
+import qualified AlohaUser as ALG
+    ( UserState
+    , initState
+    , willTransmitMsg
+    , stepUserAfter
+    , transmitMsg  -- for cleaning of generators
+    )
+
 data User = User {
         _msgQueue    :: [ForwMsg],
         _generateMsg :: [Bool],
-        _transmitMsg :: [Bool],
+        _algState    :: ALG.UserState,
         _transmit    :: Bool,  -- is attempting to transmit
         _delays      :: Int,
         _numMsgs     :: Int,
@@ -35,7 +43,7 @@ initUser :: UserParams -> User
 initUser (msgGen, transmitGen) = User {
         _msgQueue = [],
         _generateMsg = msgGen,
-        _transmitMsg = transmitGen,
+        _algState = ALG.initState transmitGen,
         _transmit = False,
         _delays = 0,
         _numMsgs = 0,
@@ -51,7 +59,7 @@ stepUserBefore = do
 maybeTransmit :: [ForwMsg] -> State User (Maybe ForwMsg)
 maybeTransmit [] = transmit .= False >> return Nothing
 maybeTransmit [msg] = do
-    willTransmit <- maybeTransmitMsg
+    willTransmit <- zoom algState ALG.willTransmitMsg
     transmit .= willTransmit
     curDelay += 1
     return $ if willTransmit then Just msg else Nothing
@@ -66,12 +74,10 @@ maybeGenerateMsg = do
             append msgQueue ForwMsg
             curDelay .= 0
 
-maybeTransmitMsg :: State User Bool
-maybeTransmitMsg = roll transmitMsg
-
 stepUserAfter :: MsgResult -> State User ()
 stepUserAfter result = do
     wasTransmit <- use transmit
+    zoom algState $ ALG.stepUserAfter result wasTransmit
     when (result == Success && wasTransmit) $ do
         cDelay <- use curDelay
         delays += cDelay
@@ -79,7 +85,7 @@ stepUserAfter result = do
         msgQueue %= tail
 
 cleanUser :: Int -> UserParams -> User -> User
-cleanUser nsteps (msgGen, transmitGen) = (transmitMsg .~ tG)
+cleanUser nsteps (msgGen, transmitGen) = (algState . ALG.transmitMsg .~ tG)
                                        . (generateMsg .~ mG)
     where tG = take nsteps transmitGen
           mG = take nsteps msgGen
