@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, BangPatterns #-}
 
 module User
     ( User
@@ -78,11 +78,19 @@ stepUserAfter :: MsgResult -> State User ()
 stepUserAfter result = do
     wasTransmit <- use transmit
     zoom algState $ ALG.stepUserAfter result wasTransmit
+    forceStats
     when (result == Success && wasTransmit) $ do
         cDelay <- use curDelay
         delays += cDelay
         numMsgs += 1
         msgQueue %= tail
+
+forceStats :: State User ()
+forceStats = do
+    !_cDelay <- use curDelay
+    !_nmsgs  <- use numMsgs
+    !_dlays  <- use delays
+    return ()
 
 cleanUser :: Int -> UserParams -> User -> User
 cleanUser nsteps (msgGen, transmitGen) = (algState . ALG.transmitMsg .~ tG)
