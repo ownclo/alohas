@@ -17,7 +17,7 @@ import Control.Monad.State.Strict
 import Interface( ForwMsg(..), MsgResult(..) )
 import Common( roll, append )
 
-import qualified AlohaUser as ALG
+import qualified BasicTreeUser as ALG
     ( UserState
     , initState
     , willTransmitMsg
