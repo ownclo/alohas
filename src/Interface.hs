@@ -1,6 +1,9 @@
 module Interface where
 
-data ForwMsg = ForwMsg
+data UserID = UID Int
+  deriving (Show, Eq)
+
+data ForwMsg = ForwMsg UserID
   deriving Show
 
 data MsgResult = Empty

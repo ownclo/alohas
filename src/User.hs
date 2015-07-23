@@ -14,7 +14,7 @@ import Control.Applicative
 import Control.Lens
 import Control.Monad.State.Strict
 
-import Interface( ForwMsg(..), MsgResult(..) )
+import Interface( UserID, ForwMsg(..), MsgResult(..) )
 import Common( roll, append )
 
 import qualified BasicTreeUser as ALG
@@ -26,6 +26,7 @@ import qualified BasicTreeUser as ALG
     )
 
 data User = User {
+        _userId      :: UserID,
         _msgQueue    :: [ForwMsg],
         _generateMsg :: [Bool],
         _algState    :: ALG.UserState,
@@ -37,10 +38,11 @@ data User = User {
 
 makeLenses ''User
 
-type UserParams = ([Bool], [Bool])
+type UserParams = (UserID, ([Bool], [Bool]))
 
 initUser :: UserParams -> User
-initUser (msgGen, transmitGen) = User {
+initUser (uid, (msgGen, transmitGen)) = User {
+        _userId = uid,
         _msgQueue = [],
         _generateMsg = msgGen,
         _algState = ALG.initState transmitGen,
@@ -71,7 +73,8 @@ maybeGenerateMsg = do
     when (qsize < 1) $ do
         willGenerate <- roll generateMsg
         when willGenerate $ do
-            append msgQueue ForwMsg
+            uid <- use userId
+            append msgQueue $ ForwMsg uid
             curDelay .= 0
 
 stepUserAfter :: MsgResult -> State User ()
@@ -93,7 +96,7 @@ forceStats = do
     return ()
 
 cleanUser :: Int -> UserParams -> User -> User
-cleanUser nsteps (msgGen, transmitGen) = (algState . ALG.transmitMsg .~ tG)
+cleanUser nsteps (_, (msgGen, transmitGen)) = (algState . ALG.transmitMsg .~ tG)
                                        . (generateMsg .~ mG)
     where tG = take nsteps transmitGen
           mG = take nsteps msgGen

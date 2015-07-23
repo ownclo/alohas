@@ -12,15 +12,19 @@ import Text.Printf( printf )
 import Model
 import User
 import Random( randomBools )
+import Interface( UserID(..) )
 
 main :: IO ()
 main = do --forM_ [0.01, 0.02 .. 1.0] $ \y -> do
         let y = 1.0
         -- nsteps <- read . head <$> getArgs
         gens <- map split <$> replicateM nusers newStdGen
-        let userParams = [([True, True, True, True, True], [True,True,True]),
-                          ([True, True, True, True, True], [False, False, False])]-- map rstreams gens
+        let {- userParams = [(UID 1, [True, True, True, True, True], [True,True,True]),
+                          (UID 2, [True, True, True, True, True], [False, False, False])] -}
+            genBools = map rstreams gens
             rstreams = randomBools y *** randomBools p
+            uids = UID <$> [1..]
+            userParams = zip uids genBools
             usrs = map initUser userParams
             model = presentModel nsteps userParams $ runModel nsteps usrs
             mDelay = meanDelay $ model^.users
