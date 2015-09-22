@@ -18,9 +18,9 @@ library
   exposed-modules:     Model
                      , Random
                      , User
+                     , Interface
   other-modules:       AlohaUser
                      , Common
-                     , Interface
                      , Lib
                      , TreeCSMACD
                      , BasicTreeUser

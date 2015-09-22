@@ -14,7 +14,11 @@ import Control.Applicative
 import Control.Lens
 import Control.Monad.State.Strict
 
-import Interface( UserID, ForwMsg(..), MsgResult(..) )
+import Interface( UserID
+                , MsgQueueLen(..)
+                , ForwMsg(..)
+                , MsgResult(..)
+                )
 import Common( roll, append )
 
 import qualified BasicTreeUser as ALG
@@ -25,31 +29,36 @@ import qualified BasicTreeUser as ALG
     , transmitMsg  -- for cleaning of generators
     )
 
+type Delay = Int
+type QMsg = (Delay, ForwMsg)
+type MsgQueue = [QMsg]
+
 data User = User {
+        -- READ-ONLY DATA (TODO: RWS?)
         _userId      :: UserID,
-        _msgQueue    :: [ForwMsg],
+        _msgQLen     :: MsgQueueLen,
+        _msgQueue    :: MsgQueue,
         _generateMsg :: [Bool],
         _algState    :: ALG.UserState,
         _transmit    :: Bool,  -- is attempting to transmit
         _delays      :: Int,
-        _numMsgs     :: Int,
-        _curDelay    :: Int
+        _numMsgs     :: Int
     } deriving Show
 
 makeLenses ''User
 
-type UserParams = (UserID, ([Bool], [Bool]))
+type UserParams = ((UserID, MsgQueueLen), ([Bool], [Bool]))
 
 initUser :: UserParams -> User
-initUser (uid, (msgGen, transmitGen)) = User {
+initUser ((uid, mqLen), (msgGen, transmitGen)) = User {
         _userId = uid,
+        _msgQLen = mqLen,
         _msgQueue = [],
         _generateMsg = msgGen,
         _algState = ALG.initState transmitGen,
         _transmit = False,
         _delays = 0,
-        _numMsgs = 0,
-        _curDelay = 0
+        _numMsgs = 0
     }
 
 stepUserBefore :: State User (Maybe ForwMsg)
@@ -58,24 +67,33 @@ stepUserBefore = do
     maybeGenerateMsg
     return mmsg
 
-maybeTransmit :: [ForwMsg] -> State User (Maybe ForwMsg)
+maybeTransmit :: MsgQueue -> State User (Maybe ForwMsg)
 maybeTransmit [] = transmit .= False >> return Nothing
-maybeTransmit [msg] = do
+maybeTransmit ((_delay, msg):_rest) = do
     willTransmit <- zoom algState ALG.willTransmitMsg
     transmit .= willTransmit
-    curDelay += 1
+    tickDelays
     return $ if willTransmit then Just msg else Nothing
-maybeTransmit _ = error "msgQueue size greater than one"
 
 maybeGenerateMsg :: State User ()
 maybeGenerateMsg = do
     qsize <- length <$> use msgQueue
-    when (qsize < 1) $ do
+    mqLen <- use msgQLen
+    when (hasEmptySpace mqLen qsize) $ do
         willGenerate <- roll generateMsg
         when willGenerate $ do
             uid <- use userId
-            append msgQueue $ ForwMsg uid
-            curDelay .= 0
+            append msgQueue $ newMsg uid
+
+hasEmptySpace :: MsgQueueLen -> Int -> Bool
+hasEmptySpace INF _ = True
+hasEmptySpace (Bounded bound) qsize = qsize < bound
+
+newMsg :: UserID -> QMsg
+newMsg uid = (0, ForwMsg uid)
+
+tickDelays :: State User ()
+tickDelays = msgQueue.mapped._1 += 1
 
 stepUserAfter :: MsgResult -> State User ()
 stepUserAfter result = do
@@ -83,14 +101,13 @@ stepUserAfter result = do
     zoom algState $ ALG.stepUserAfter result wasTransmit
     forceStats
     when (result == Success && wasTransmit) $ do
-        cDelay <- use curDelay
+        (!cDelay, _msg) <- head <$> use msgQueue
         delays += cDelay
         numMsgs += 1
         msgQueue %= tail
 
 forceStats :: State User ()
 forceStats = do
-    !_cDelay <- use curDelay
     !_nmsgs  <- use numMsgs
     !_dlays  <- use delays
     return ()
