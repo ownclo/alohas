@@ -22,7 +22,7 @@ main = do --forM_ [0.01, 0.02 .. 1.0] $ \y -> do
         let genBools = map rstreams gens
             rstreams = randomBools y *** randomBools p
             uids = UID <$> [1..]
-            params = zip uids (repeat $ Bounded 1)
+            params = zip uids (repeat ())
             userParams = zip params genBools
             -- userParams = [((UID 1, INF), ([True, True, True, True, True], [True,True,True])),
             --               ((UID 2, INF), ([True, True, True, True, True], [True, False, False]))]
@@ -30,7 +30,7 @@ main = do --forM_ [0.01, 0.02 .. 1.0] $ \y -> do
             model = presentModel nsteps userParams $ runModel nsteps usrs
             mDelay = meanDelay $ model^.users
         void $ printf "%.2f\t%.5f\n" y (mDelay :: Double)
-        -- print $ model^.stats
+        print $ model^.stats
         mapM_ print $ model^.users
     where nusers = 2
           nsteps = 5

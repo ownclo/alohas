@@ -24,6 +24,7 @@ library
                      , Lib
                      , TreeCSMACD
                      , BasicTreeUser
+                     , TwoBufferQueue
   build-depends:       base >= 4.7 && < 5
                      , lens
                      , random

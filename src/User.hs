@@ -13,13 +13,14 @@ module User
 import Control.Applicative
 import Control.Lens
 import Control.Monad.State.Strict
+import Data.Maybe( fromJust )
 
 import Interface( UserID
-                , MsgQueueLen(..)
                 , ForwMsg(..)
                 , MsgResult(..)
                 )
-import Common( roll, append )
+import Common( roll )
+import qualified TwoBufferQueue as MSG
 
 import qualified BasicTreeUser as ALG
     ( UserState
@@ -31,12 +32,12 @@ import qualified BasicTreeUser as ALG
 
 type Delay = Int
 type QMsg = (Delay, ForwMsg)
-type MsgQueue = [QMsg]
+type MsgQueue = MSG.MsgSource QMsg
+type MsgParams = MSG.MsgParams
 
 data User = User {
-        -- READ-ONLY DATA (TODO: RWS?)
         _userId      :: UserID,
-        _msgQLen     :: MsgQueueLen,
+        _msgQPrms    :: MsgParams,
         _msgQueue    :: MsgQueue,
         _generateMsg :: [Bool],
         _algState    :: ALG.UserState,
@@ -47,13 +48,13 @@ data User = User {
 
 makeLenses ''User
 
-type UserParams = ((UserID, MsgQueueLen), ([Bool], [Bool]))
+type UserParams = ((UserID, MsgParams), ([Bool], [Bool]))
 
 initUser :: UserParams -> User
 initUser ((uid, mqLen), (msgGen, transmitGen)) = User {
         _userId = uid,
-        _msgQLen = mqLen,
-        _msgQueue = [],
+        _msgQPrms = mqLen,
+        _msgQueue = MSG.init,
         _generateMsg = msgGen,
         _algState = ALG.initState transmitGen,
         _transmit = False,
@@ -68,32 +69,31 @@ stepUserBefore = do
     return mmsg
 
 maybeTransmit :: MsgQueue -> State User (Maybe ForwMsg)
-maybeTransmit [] = transmit .= False >> return Nothing
-maybeTransmit ((_delay, msg):_rest) = do
-    willTransmit <- zoom algState ALG.willTransmitMsg
-    transmit .= willTransmit
-    tickDelays
-    return $ if willTransmit then Just msg else Nothing
+maybeTransmit mq = case MSG.getTransmit mq of
+    Nothing -> transmit .= False >> return Nothing
+    Just (_delay, msg) -> do
+        willTransmit <- zoom algState ALG.willTransmitMsg
+        transmit .= willTransmit
+        -- XXX: tickDelays need to be performed event if no messages
+        -- to transmit are present (!)
+        zoom msgQueue $ MSG.tickDelays tick
+        return $ if willTransmit then Just msg else Nothing
 
 maybeGenerateMsg :: State User ()
 maybeGenerateMsg = do
-    qsize <- length <$> use msgQueue
-    mqLen <- use msgQLen
-    when (hasEmptySpace mqLen qsize) $ do
+    mq <- use msgQueue
+    mqPrms <- use msgQPrms
+    when (MSG.canGenerate mqPrms mq) $ do
         willGenerate <- roll generateMsg
         when willGenerate $ do
-            uid <- use userId
-            append msgQueue $ newMsg uid
-
-hasEmptySpace :: MsgQueueLen -> Int -> Bool
-hasEmptySpace INF _ = True
-hasEmptySpace (Bounded bound) qsize = qsize < bound
+            msg <- newMsg <$> use userId
+            zoom msgQueue $ MSG.storeGenerate msg
 
 newMsg :: UserID -> QMsg
 newMsg uid = (0, ForwMsg uid)
 
-tickDelays :: State User ()
-tickDelays = msgQueue.mapped._1 += 1
+tick :: QMsg -> QMsg
+tick = _1 +~ 1
 
 stepUserAfter :: MsgResult -> State User ()
 stepUserAfter result = do
@@ -101,10 +101,11 @@ stepUserAfter result = do
     zoom algState $ ALG.stepUserAfter result wasTransmit
     forceStats
     when (result == Success && wasTransmit) $ do
-        (!cDelay, _msg) <- head <$> use msgQueue
+        (!cDelay, _msg) <- fromJust . MSG.getTransmit <$> use msgQueue
         delays += cDelay
         numMsgs += 1
-        msgQueue %= tail
+        -- XXX: SHIFT FOR TBQ IS NOT PERFORMED UNTIL CONFLICT IS OVER
+        zoom msgQueue MSG.shiftTransmit
 
 forceStats :: State User ()
 forceStats = do
@@ -114,7 +115,7 @@ forceStats = do
 
 cleanUser :: Int -> UserParams -> User -> User
 cleanUser nsteps (_, (msgGen, transmitGen)) = (algState . ALG.transmitMsg .~ tG)
-                                       . (generateMsg .~ mG)
+                                            . (generateMsg .~ mG)
     where tG = take nsteps transmitGen
           mG = take nsteps msgGen
 
