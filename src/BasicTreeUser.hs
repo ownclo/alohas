@@ -6,7 +6,7 @@ import Control.Lens
 import Control.Monad.State.Strict
 
 import Common( roll )
-import Interface( MsgResult(..) )
+import Interface( MsgResult(..), MsgSourceType(..) )
 
 import TreeCSMACD
 
@@ -38,3 +38,9 @@ stepUserAfter res wasTransmit = do
         transmitNow <- roll transmitMsg
         Just ctr <- use tree
         label .= decideTransmit transmitNow ctr
+
+-- XXX: in the end of a conflict, no user has something in
+-- its OUT buffer, so shift in the end SHOULD be safe
+canShift :: MsgSourceType -> MsgResult -> Bool -> State UserState Bool
+canShift BoundedQueue res wasTransmit = return $ res == Success && wasTransmit
+canShift TwoBufferQueue _res _wasTransmit = uses tree isResolved

@@ -1,9 +1,9 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts #-}
-
 module TwoBufferQueue where
 
 import Control.Monad.State.Strict
 import Data.Maybe( isNothing )
+
+import Interface( MsgSourceType(..) )
 
 type MsgParams = ()
 type MsgSource a = TBQ a
@@ -15,6 +15,9 @@ data TBQ a = TBQ {
 
 instance Functor TBQ where
         fmap f (TBQ i o) = TBQ (fmap f i) (fmap f o)
+
+sourceType :: MsgSourceType
+sourceType = TwoBufferQueue
 
 init :: TBQ a
 init = TBQ Nothing Nothing
@@ -40,3 +43,7 @@ shiftTransmit = modify shiftTransmit'
 
 tickDelays :: (a -> a) -> State (TBQ a) ()
 tickDelays tick = modify $ fmap tick
+
+dropMsg :: State (TBQ a) ()
+dropMsg = modify dropMsg'
+    where dropMsg' (TBQ i _o) = TBQ i Nothing

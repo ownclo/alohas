@@ -6,6 +6,7 @@ module TreeCSMACD
     , canTransmit
     , decideTransmit
     , updateCTree
+    , isResolved
     -- testing
     ,treeFromResults
     ) where
@@ -50,7 +51,7 @@ buildTreeM res (Just (t,s)) = buildTree' s t res
 buildTree :: MsgResult -> Maybe CTree -> Maybe CTree
 buildTree r mt = do
     (t, s) <- buildTreeM r mt
-    guard . not $ isResolved t
+    guard . not $ isResolved' t
     return (t, s)
 
 updateCTree :: MsgResult -> Maybe CTree -> Maybe CTree
@@ -78,8 +79,11 @@ rightNode = CNode
 -- on a structure of a tree that
 -- buildTree t * == Nothing <=> there is no more UNDEFS
 -- => tree is resolved
-isResolved :: Tree -> Bool
-isResolved t = isNothing $ buildTree' 0 t Success
+isResolved' :: Tree -> Bool
+isResolved' t = isNothing $ buildTree' 0 t Success
+
+isResolved :: Maybe CTree -> Bool
+isResolved = isNothing
 
 leftUndef :: Tree -> Maybe Tree
 leftUndef u@(Undef _) = Just u

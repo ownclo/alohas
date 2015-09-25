@@ -15,8 +15,11 @@ import Random( randomBools )
 import Interface( UserID(..), MsgQueueLen(..) )
 
 main :: IO ()
-main = do --forM_ [0.01, 0.02 .. 1.0] $ \y -> do
-        let y = 1.0
+main =
+       -- forM_ [0.01, 0.11 .. 0.51] $ \lambda -> do
+       forM_ [0, 1 .. 7] $ \nsteps -> do
+        let y = 0.3
+        -- let y = lambda / fromIntegral nusers
         -- nsteps <- read . head <$> getArgs
         gens <- map split <$> replicateM nusers newStdGen
         let genBools = map rstreams gens
@@ -24,14 +27,17 @@ main = do --forM_ [0.01, 0.02 .. 1.0] $ \y -> do
             uids = UID <$> [1..]
             params = zip uids (repeat ())
             userParams = zip params genBools
-            -- userParams = [((UID 1, INF), ([True, True, True, True, True], [True,True,True])),
-            --               ((UID 2, INF), ([True, True, True, True, True], [True, False, False]))]
+            -- userParams = [((UID 1, ()), ([False, False, False, False, False, False, False], [False,True,True]))
+            --              ,((UID 2, ()), ([False, False, False, False, False, False, False], [False, False, False]))
+            --              ,((UID 3, ()), ([True, True, True, True, True], [True, True, True]))
+            --              ]
             usrs = map initUser userParams
             model = presentModel nsteps userParams $ runModel nsteps usrs
             mDelay = meanDelay $ model^.users
-        void $ printf "%.2f\t%.5f\n" y (mDelay :: Double)
+        -- void $ printf "%.2f\t%.5f\n" lambda (mDelay :: Double)
         print $ model^.stats
         mapM_ print $ model^.users
-    where nusers = 2
-          nsteps = 5
+        putStrLn ""
+    where nusers = 3
+          nsteps = 10
           p = 0.5 -- for Tree Algorithms

@@ -27,6 +27,7 @@ import qualified BasicTreeUser as ALG
     , initState
     , willTransmitMsg
     , stepUserAfter
+    , canShift
     , transmitMsg  -- for cleaning of generators
     )
 
@@ -65,6 +66,7 @@ initUser ((uid, mqLen), (msgGen, transmitGen)) = User {
 stepUserBefore :: State User (Maybe ForwMsg)
 stepUserBefore = do
     mmsg <- maybeTransmit =<< use msgQueue
+    zoom msgQueue $ MSG.tickDelays tick
     maybeGenerateMsg
     return mmsg
 
@@ -74,9 +76,6 @@ maybeTransmit mq = case MSG.getTransmit mq of
     Just (_delay, msg) -> do
         willTransmit <- zoom algState ALG.willTransmitMsg
         transmit .= willTransmit
-        -- XXX: tickDelays need to be performed event if no messages
-        -- to transmit are present (!)
-        zoom msgQueue $ MSG.tickDelays tick
         return $ if willTransmit then Just msg else Nothing
 
 maybeGenerateMsg :: State User ()
@@ -100,12 +99,16 @@ stepUserAfter result = do
     wasTransmit <- use transmit
     zoom algState $ ALG.stepUserAfter result wasTransmit
     forceStats
+    canShift <- zoom algState $ ALG.canShift MSG.sourceType result wasTransmit
     when (result == Success && wasTransmit) $ do
         (!cDelay, _msg) <- fromJust . MSG.getTransmit <$> use msgQueue
         delays += cDelay
         numMsgs += 1
-        -- XXX: SHIFT FOR TBQ IS NOT PERFORMED UNTIL CONFLICT IS OVER
-        zoom msgQueue MSG.shiftTransmit
+        zoom msgQueue MSG.dropMsg
+    -- XXX: SHIFT FOR TBQ IS NOT PERFORMED UNTIL CONFLICT IS OVER,
+    -- whereas for ordinary queue a shift is performed immediately
+    -- after successful transmission.
+    when canShift $ zoom msgQueue MSG.shiftTransmit
 
 forceStats :: State User ()
 forceStats = do

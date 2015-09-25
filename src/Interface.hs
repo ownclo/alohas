@@ -13,3 +13,6 @@ data MsgResult = Empty
                | Success
                | Conflict
                deriving (Eq, Show)
+
+data MsgSourceType = BoundedQueue
+                   | TwoBufferQueue

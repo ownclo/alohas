@@ -34,7 +34,7 @@ library
 executable new-template-exe
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -O3 -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , lens
                      , random
