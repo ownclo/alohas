@@ -19,7 +19,7 @@ import Interface( UserID
                 , ForwMsg(..)
                 , MsgResult(..)
                 )
-import Common( roll )
+import Common( roll, isSuccess )
 import qualified TwoBufferQueue as MSG
 
 import qualified BasicTreeUser as ALG
@@ -100,7 +100,7 @@ stepUserAfter result = do
     zoom algState $ ALG.stepUserAfter result wasTransmit
     forceStats
     canShift <- zoom algState $ ALG.canShift MSG.sourceType result wasTransmit
-    when (result == Success && wasTransmit) $ do
+    when (isSuccess result && wasTransmit) $ do
         (!cDelay, _msg) <- fromJust . MSG.getTransmit <$> use msgQueue
         delays += cDelay
         numMsgs += 1

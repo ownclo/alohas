@@ -5,7 +5,7 @@ module BasicTreeUser where
 import Control.Lens
 import Control.Monad.State.Strict
 
-import Common( roll )
+import Common( roll, isSuccess, isConflict )
 import Interface( MsgResult(..), MsgSourceType(..) )
 
 import TreeCSMACD
@@ -13,7 +13,7 @@ import TreeCSMACD
 data UserState = UserState {
          _transmitMsg :: [Bool],
          _label :: Label,
-         _tree  :: Maybe CTree
+         _tree  :: Maybe Tree
     } deriving Show
 
 makeLenses ''UserState
@@ -22,7 +22,7 @@ initState :: [Bool] -> UserState
 initState gen = UserState {
         _transmitMsg = gen,
         _label = initLabel,
-        _tree  = initCTree
+        _tree  = initTree
     }
 
 willTransmitMsg :: State UserState Bool
@@ -33,14 +33,13 @@ willTransmitMsg = do
 
 stepUserAfter :: MsgResult -> Bool -> State UserState ()
 stepUserAfter res wasTransmit = do
-    tree %= updateCTree res
-    when (res == Conflict && wasTransmit) $ do
+    tree %= updateTree res
+    when (isConflict res && wasTransmit) $ do
         transmitNow <- roll transmitMsg
-        Just ctr <- use tree
-        label .= decideTransmit transmitNow ctr
+        label %= decideTransmit transmitNow
 
 -- XXX: in the end of a conflict, no user has something in
 -- its OUT buffer, so shift in the end SHOULD be safe
 canShift :: MsgSourceType -> MsgResult -> Bool -> State UserState Bool
-canShift BoundedQueue res wasTransmit = return $ res == Success && wasTransmit
+canShift BoundedQueue res wasTransmit = return $ isSuccess res && wasTransmit
 canShift TwoBufferQueue _res _wasTransmit = uses tree isResolved

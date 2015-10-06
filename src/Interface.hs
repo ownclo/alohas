@@ -6,12 +6,12 @@ data UserID = UID Int
 data MsgQueueLen = INF | Bounded Int
                  deriving Show
 
-data ForwMsg = ForwMsg UserID
+data ForwMsg = ForwMsg { _uid :: UserID }
   deriving Show
 
 data MsgResult = Empty
-               | Success
-               | Conflict
+               | Success UserID
+               | Conflict [UserID]
                deriving (Eq, Show)
 
 data MsgSourceType = BoundedQueue

@@ -62,7 +62,7 @@ stepModel :: Model ()
 stepModel = stepUsersBefore
         >>= stepForwChannel
         >>= stepStation
-        >>= stepStatistics
+        -- >>= stepStatistics
         >>= stepBackChannel
         >>= stepUsersAfter
 
@@ -80,8 +80,8 @@ stepStation' = return . recvMsgs
 
 recvMsgs :: [ForwMsg] -> MsgResult
 recvMsgs []  = Empty
-recvMsgs [_] = Success
-recvMsgs _   = Conflict
+recvMsgs [ForwMsg uid] = Success uid
+recvMsgs ls   = Conflict $ map _uid ls
 
 stepStatistics :: MsgResult -> Model MsgResult
 stepStatistics = zoom stats . stepStats

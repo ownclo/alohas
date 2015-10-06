@@ -6,6 +6,7 @@ import Control.Lens
 import Control.Monad.State
 
 import Data.List( genericLength )
+import Interface( MsgResult(..) )
 
 roll :: MonadState s m => Lens' s [a] -> m a
 roll alens = do
@@ -22,3 +23,11 @@ mean l = realToFrac (sum l) / genericLength l
 whenMaybe :: Monad m => Maybe a -> (a -> m ()) -> m ()
 whenMaybe Nothing  _   = return ()
 whenMaybe (Just x) a = a x
+
+isConflict :: MsgResult -> Bool
+isConflict (Conflict _) = True
+isConflict _ = False
+
+isSuccess :: MsgResult -> Bool
+isSuccess (Success _) = True
+isSuccess _ = False

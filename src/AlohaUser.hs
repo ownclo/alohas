@@ -5,7 +5,7 @@ module AlohaUser where
 import Control.Lens
 import Control.Monad.State.Strict
 
-import Common( roll )
+import Common( roll, isSuccess )
 import Interface( MsgResult(..), MsgSourceType(..) )
 
 data UserState = UserState {
@@ -24,4 +24,4 @@ stepUserAfter :: MsgResult -> Bool -> State UserState ()
 stepUserAfter _ _ = return ()
 
 canShift :: MsgSourceType -> MsgResult -> Bool -> State UserState Bool
-canShift _ res wasTransmit = return $ res == Success && wasTransmit
+canShift _ res wasTransmit = return $ isSuccess res && wasTransmit
