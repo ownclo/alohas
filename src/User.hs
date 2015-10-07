@@ -8,6 +8,8 @@ module User
     , stepUserAfter
     , cleanUser
     , meanDelay
+    , delays
+    , numMsgs
     ) where
 
 import Control.Applicative

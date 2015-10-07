@@ -16,10 +16,11 @@ import Interface( UserID(..), MsgQueueLen(..) )
 
 main :: IO ()
 main =
-       forM_ [0.5, 0.6 .. 0.9] $ \lambda -> do
+       do
+       -- forM_ [0.0, 0.1 .. 0.5] $ \lambda -> do
        -- forM_ [0, 1 .. 9] $ \nsteps -> do
-       --  let y = 0.3
-        let y = lambda -- / fromIntegral nusers
+        let y = lambda; lambda = 1.0
+        --  let y = lambda -- / fromIntegral nusers
         -- nsteps <- read . head <$> getArgs
         gens <- map split <$> replicateM nusers newStdGen
         let genBools = map rstreams gens
@@ -32,12 +33,14 @@ main =
             --              ,((UID 3, ()), ([True] ++ repeat False, [False, True,  True]))
             --              ]
             usrs = map initUser userParams
-            model = {- presentModel nsteps userParams $ -} runModel nsteps usrs
+            model = presentModel nsteps userParams $ runModel nsteps usrs
             mDelay = meanDelay $ model^.users
-        void $ printf "%.2f\t%.5f\n" lambda (mDelay :: Double)
-        -- print $ model^.stats
-        -- mapM_ print $ model^.users
-        -- putStrLn ""
-    where nusers = 16
-          nsteps = 1000000
+            dlays = sum $ map (fromIntegral . view delays) $ model^.users :: Integer
+            nmsgs = sum $ map (fromIntegral . view numMsgs) $ model^.users :: Integer
+        void $ printf "%.2f\t%.5f\t%d\t%d\n" lambda (mDelay :: Double) dlays nmsgs
+        print $ model^.stats
+        mapM_ print $ model^.users
+        putStrLn ""
+    where nusers = 4
+          nsteps = 40
           p = 0.5 -- for Tree Algorithms
