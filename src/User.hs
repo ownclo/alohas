@@ -19,7 +19,7 @@ import Data.Maybe( fromJust )
 
 import Interface( UserID
                 , ForwMsg(..)
-                , MsgResult(..)
+                , StationFeedback
                 )
 import Common( roll, isSuccess )
 import qualified TwoBufferQueue as MSG
@@ -87,7 +87,7 @@ maybeGenerateMsg = do
     when (MSG.canGenerate mqPrms mq) $ do
         willGenerate <- roll generateMsg
         when willGenerate $ do
-            msg <- newMsg <$> use userId
+            msg <- uses userId newMsg
             zoom msgQueue $ MSG.storeGenerate msg
 
 newMsg :: UserID -> QMsg
@@ -96,8 +96,8 @@ newMsg uid = (0, ForwMsg uid)
 tick :: QMsg -> QMsg
 tick = _1 +~ 1
 
-stepUserAfter :: MsgResult -> State User ()
-stepUserAfter result = do
+stepUserAfter :: StationFeedback -> State User ()
+stepUserAfter (result, _recovered) = do
     wasTransmit <- use transmit
     zoom algState $ ALG.stepUserAfter result wasTransmit
     forceStats

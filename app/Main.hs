@@ -27,11 +27,12 @@ main =
             rstreams = randomBools y *** randomBools p
             uids = UID <$> [1..]
             params = zip uids (repeat ())
-            userParams = zip params genBools
-            -- userParams = [((UID 1, ()), ([True] ++ repeat False, [True,  False, True,  False, True]))
-            --              ,((UID 2, ()), ([True] ++ repeat False, [True,  False, False, False, False]))
-            --              ,((UID 3, ()), ([True] ++ repeat False, [False, True,  True]))
-            --              ]
+            -- params = zip uids (repeat INF)
+            -- userParams = zip params genBools
+            userParams = [((UID 1, ()), ([True] ++ repeat False, [True,  False, True,  False, True]))
+                         ,((UID 2, ()), ([True] ++ repeat False, [True,  False, False, False, False]))
+                         -- ,((UID 3, ()), ([True] ++ repeat False, [False, True,  True]))
+                         ]
             usrs = map initUser userParams
             model = presentModel nsteps userParams $ runModel nsteps usrs
             mDelay = meanDelay $ model^.users
@@ -42,5 +43,5 @@ main =
         mapM_ print $ model^.users
         putStrLn ""
     where nusers = 4
-          nsteps = 40
+          nsteps = 7
           p = 0.5 -- for Tree Algorithms

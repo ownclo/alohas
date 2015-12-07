@@ -17,6 +17,9 @@ roll alens = do
 append :: MonadState s m => Lens' s [a] -> a -> m ()
 append alens val = alens <>= [val]
 
+prepend :: MonadState s m => Lens' s [a] -> a -> m ()
+prepend alens val = alens %= (val:)
+
 mean :: (Real a, Fractional b) => [a] -> b
 mean l = realToFrac (sum l) / genericLength l
 

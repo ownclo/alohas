@@ -8,14 +8,17 @@ import Control.Lens
 
 import Data.Maybe( maybeToList )
 
-import Interface( ForwMsg(..), MsgResult(..) )
+import Interface( ForwMsg(..)
+                , StationFeedback
+                )
 import Common( append )
 import User
+import qualified GiaStation as ST
 
 data ModelState = ModelState {
         _forwChannel :: ForwChannel,
         _backChannel :: BackChannel,
-        _station     :: Station,
+        _station     :: ST.Station,
         _users       :: [User],
         _stats       :: Stats
     } deriving Show
@@ -26,11 +29,8 @@ data ForwChannel = ForwChannel
 data BackChannel = BackChannel
   deriving Show
 
-data Station = Station
-  deriving Show
-
 data Stats = Stats {
-        _history :: [MsgResult]
+        _history :: [StationFeedback]
     } deriving Show
 
 makeLenses ''Stats
@@ -42,7 +42,7 @@ initModel :: [User] -> ModelState
 initModel usrs = ModelState {
         _forwChannel = ForwChannel,
         _backChannel = BackChannel,
-        _station = Station,
+        _station = ST.initStation,
         _users = usrs,
         _stats = Stats []
     }
@@ -72,24 +72,16 @@ stepUsersBefore = zoom (users.traversed) $ maybeToList <$> stepUserBefore
 stepForwChannel :: [ForwMsg] -> Model [ForwMsg]
 stepForwChannel = zoom forwChannel . return
 
-stepStation :: [ForwMsg] -> Model MsgResult
-stepStation = zoom station . stepStation'
+stepStation :: [ForwMsg] -> Model StationFeedback
+stepStation = zoom station . ST.stepStation
 
-stepStation' :: [ForwMsg] -> State Station MsgResult
-stepStation' = return . recvMsgs
-
-recvMsgs :: [ForwMsg] -> MsgResult
-recvMsgs []  = Empty
-recvMsgs [ForwMsg uid] = Success uid
-recvMsgs ls   = Conflict $ map _uid ls
-
-stepStatistics :: MsgResult -> Model MsgResult
+stepStatistics :: StationFeedback -> Model StationFeedback
 stepStatistics = zoom stats . stepStats
-    where stepStats res = append history res  -- history %= (res:)
+    where stepStats res = append history res  -- prepend history res
                        >> return res
 
-stepBackChannel :: MsgResult -> Model MsgResult
+stepBackChannel :: StationFeedback -> Model StationFeedback
 stepBackChannel = zoom backChannel . return
 
-stepUsersAfter :: MsgResult -> Model ()
+stepUsersAfter :: StationFeedback -> Model ()
 stepUsersAfter = zoom (users.traversed) . stepUserAfter
