@@ -29,6 +29,7 @@ willTransmitMsg :: State UserState Bool
 willTransmitMsg = do
     lbl <- use label
     ctr <- use tree
+    label %= updateLabel ctr
     return $ canTransmit lbl ctr
 
 stepUserAfter :: MsgResult -> Bool -> State UserState ()

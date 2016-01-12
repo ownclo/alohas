@@ -7,6 +7,7 @@ module TreeCSMACD
     , decideTransmit
     , updateTree
     , updateTreeS
+    , updateLabel
     , isResolved
 
     -- GiaStation
@@ -105,6 +106,11 @@ leftUndef u@(Undef _ _) = Just u
 leftUndef (CNode _ _ a b) =
     leftUndef a <|> leftUndef b
 leftUndef _ = Nothing
+
+-- need to reset label after successful transmission
+updateLabel :: Maybe (Tree a) -> Label -> Label
+updateLabel Nothing _ = []
+updateLabel _ lbl = lbl
 
 canTransmit :: Label -> Maybe (Tree a) -> Bool
 canTransmit _ Nothing = True
