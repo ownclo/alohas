@@ -1,14 +1,19 @@
 module TreeCSMACD
-    ( Tree
+    ( Tree(..) -- NOTE: constructors are exported for GiaStation
     , Label
     , initLabel
     , initTree
     , canTransmit
     , decideTransmit
     , updateTree
+    , updateTreeS
     , isResolved
+
+    -- GiaStation
+    , leftUndef
     -- testing
     ,treeFromResults
+    ,treeFromResults'
     ) where
 
 import Control.Applicative
@@ -18,60 +23,70 @@ import Data.Maybe( isNothing )
 
 import Interface( MsgResult(..) )
 
-initTree :: Maybe Tree
+initTree :: Maybe (Tree a)
 initTree = Nothing
 
 initLabel :: Label
 initLabel = []
 
-data Tree = ELeaf Label
-          | SLeaf Label
-          | CNode Label Tree Tree
-          | Undef Label
-          deriving (Eq, Show)
+data Tree a = ELeaf Label a
+            | SLeaf Label a
+            | CNode Label a (Tree a) (Tree a)
+            | Undef Label a
+            deriving (Eq, Show)
 
 type Label = [Bool]
 
-buildTree' :: Tree -> MsgResult -> Maybe Tree
-buildTree' (ELeaf _) _ = Nothing
-buildTree' (SLeaf _) _ = Nothing
-buildTree' (Undef lbl) r = Just $ newNode lbl r
-buildTree' (CNode lbl a b) r  =
-      leftNode  lbl b <$> buildTree' a r <|>
-      rightNode lbl a <$> buildTree' b r
+buildTree' :: a -> Tree a -> MsgResult -> Maybe (Tree a)
+buildTree' _ (ELeaf _ _) _ = Nothing
+buildTree' _ (SLeaf _ _) _ = Nothing
+buildTree' p (Undef lbl _) r = Just $ newNode lbl p r
+buildTree' p (CNode lbl o a b) r  =
+      leftNode  lbl o b <$> buildTree' p a r <|>
+      rightNode lbl o a <$> buildTree' p b r
 
-buildTreeM :: MsgResult -> Maybe Tree -> Maybe Tree
-buildTreeM (Conflict _) Nothing = Just $ newCNode []
-buildTreeM _            Nothing = Nothing
-buildTreeM res (Just t) = buildTree' t res
+buildTreeM :: MsgResult -> a -> Maybe (Tree a) -> Maybe (Tree a)
+buildTreeM (Conflict _) a Nothing = Just $ newCNode [] a
+buildTreeM _            _ Nothing = Nothing
+buildTreeM res a (Just t) = buildTree' a t res
 
-buildTree :: MsgResult -> Maybe Tree -> Maybe Tree
-buildTree r mt = do
-    t <- buildTreeM r mt
-    guard . not $ isResolved' t
+buildTree :: MsgResult -> a -> Maybe (Tree a) -> Maybe (Tree a)
+buildTree r a mt = do
+    t <- buildTreeM r a mt
+    guard . not $ isResolved' a t
     return t
 
-updateTree :: MsgResult -> Maybe Tree -> Maybe Tree
+buildTreeS :: MsgResult -> Maybe (Tree ()) -> Maybe (Tree ())
+buildTreeS r = buildTree r ()
+
+updateTreeS :: MsgResult -> Maybe (Tree ()) -> Maybe (Tree ())
+updateTreeS = buildTreeS
+
+updateTree :: MsgResult -> a -> Maybe (Tree a) -> Maybe (Tree a)
 updateTree = buildTree
 
-treeFromResults :: [MsgResult] -> Maybe Tree
-treeFromResults = foldl (flip buildTree) Nothing
+treeFromResults :: [MsgResult] -> Maybe (Tree ())
+treeFromResults = foldl (flip buildTreeS) Nothing
 
-newNode :: Label -> MsgResult -> Tree
-newNode lbl (Success _)  = SLeaf lbl
-newNode lbl Empty        = ELeaf lbl
-newNode lbl (Conflict _) = newCNode lbl
+treeFromResults' :: [MsgResult] -> Maybe (Tree MsgResult)
+treeFromResults' = foldl buildT Nothing
+    where buildT mt r = buildTree r r mt
 
-newCNode :: Label -> Tree
-newCNode lbl = CNode lbl (Undef (decideTransmit True lbl))
-                         (Undef (decideTransmit False lbl))
+newNode :: Label -> a -> MsgResult -> Tree a
+newNode lbl a (Success _)  = SLeaf lbl a
+newNode lbl a Empty        = ELeaf lbl a
+newNode lbl a (Conflict _) = newCNode lbl a
+
+newCNode :: Label -> a -> Tree a
+newCNode lbl a = CNode lbl a (Undef (decideTransmit True  lbl) a)
+                             (Undef (decideTransmit False lbl) a)
 
 -- Build tree, last arg is a leftNode
-leftNode :: Label -> Tree -> Tree -> Tree
-leftNode lbl b a = CNode lbl a b
+leftNode :: Label -> a -> Tree a -> Tree a -> Tree a
+leftNode lbl p b a = CNode lbl p a b
 
 -- Build tree, last arg is rightNode
-rightNode :: Label -> Tree -> Tree -> Tree
+rightNode :: Label -> a -> Tree a -> Tree a -> Tree a
 rightNode = CNode
 
 -- A conflict is resolved if there is no more
@@ -79,24 +94,24 @@ rightNode = CNode
 -- on a structure of a tree that
 -- buildTree t * == Nothing <=> there is no more UNDEFS
 -- => tree is resolved
-isResolved' :: Tree -> Bool
-isResolved' t = isNothing $ buildTree' t (Success undefined)
+isResolved' :: a -> Tree a -> Bool
+isResolved' a t = isNothing $ buildTree' a t (Success undefined)
 
-isResolved :: Maybe Tree -> Bool
+isResolved :: Maybe (Tree a) -> Bool
 isResolved = isNothing
 
-leftUndef :: Tree -> Maybe Tree
-leftUndef u@(Undef _) = Just u
-leftUndef (CNode _ a b) =
+leftUndef :: Tree a -> Maybe (Tree a)
+leftUndef u@(Undef _ _) = Just u
+leftUndef (CNode _ _ a b) =
     leftUndef a <|> leftUndef b
 leftUndef _ = Nothing
 
-canTransmit :: Label -> Maybe Tree -> Bool
+canTransmit :: Label -> Maybe (Tree a) -> Bool
 canTransmit _ Nothing = True
 canTransmit lbl (Just t) =
     case leftUndef t of
       Nothing -> error "tree is resolved, shouldn't be called" -- True
-      Just (Undef lbl') -> lbl' == lbl
+      Just (Undef lbl' _) -> lbl' == lbl
       Just _ -> error "leftUndef is not undef, ACHTUNG!"
 
 -- after conflict, user decides whether to

@@ -46,7 +46,8 @@ data User = User {
         _algState    :: ALG.UserState,
         _transmit    :: Bool,  -- is attempting to transmit
         _delays      :: Int,
-        _numMsgs     :: Int
+        _numMsgs     :: Int,
+        _needTick    :: Bool
     } deriving Show
 
 makeLenses ''User
@@ -62,13 +63,15 @@ initUser ((uid, mqLen), (msgGen, transmitGen)) = User {
         _algState = ALG.initState transmitGen,
         _transmit = False,
         _delays = 0,
-        _numMsgs = 0
+        _numMsgs = 0,
+        _needTick = True
     }
 
 stepUserBefore :: State User (Maybe ForwMsg)
 stepUserBefore = do
     mmsg <- maybeTransmit =<< use msgQueue
-    zoom msgQueue $ MSG.tickDelays tick
+    willTick <- use needTick
+    when willTick $ zoom msgQueue $ MSG.tickDelays tick
     maybeGenerateMsg
     return mmsg
 
@@ -97,8 +100,9 @@ tick :: QMsg -> QMsg
 tick = _1 +~ 1
 
 stepUserAfter :: StationFeedback -> State User ()
-stepUserAfter (result, _recovered) = do
+stepUserAfter (result, transmittedWindow) = do
     wasTransmit <- use transmit
+    needTick .= transmittedWindow
     zoom algState $ ALG.stepUserAfter result wasTransmit
     forceStats
     canShift <- zoom algState $ ALG.canShift MSG.sourceType result wasTransmit
@@ -106,6 +110,7 @@ stepUserAfter (result, _recovered) = do
         (!cDelay, _msg) <- fromJust . MSG.getTransmit <$> use msgQueue
         delays += cDelay
         numMsgs += 1
+        needTick .= True
         zoom msgQueue MSG.dropMsg
     -- XXX: SHIFT FOR TBQ IS NOT PERFORMED UNTIL CONFLICT IS OVER,
     -- whereas for ordinary queue a shift is performed immediately

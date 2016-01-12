@@ -13,7 +13,7 @@ import TreeCSMACD
 data UserState = UserState {
          _transmitMsg :: [Bool],
          _label :: Label,
-         _tree  :: Maybe Tree
+         _tree  :: Maybe (Tree ())
     } deriving Show
 
 makeLenses ''UserState
@@ -33,7 +33,7 @@ willTransmitMsg = do
 
 stepUserAfter :: MsgResult -> Bool -> State UserState ()
 stepUserAfter res wasTransmit = do
-    tree %= updateTree res
+    tree %= updateTreeS res
     when (isConflict res && wasTransmit) $ do
         transmitNow <- roll transmitMsg
         label %= decideTransmit transmitNow

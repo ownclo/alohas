@@ -14,8 +14,9 @@ data MsgResult = Empty
                | Conflict [UserID]
                deriving (Eq, Show)
 
--- second element is a list of recovered transmissions
-type StationFeedback = (MsgResult, [[UserID]])
+-- second element is an indicator as to whether the window should be
+-- counted in statistics.
+type StationFeedback = (MsgResult, Bool)
 
 data MsgSourceType = BoundedQueue
                    | TwoBufferQueue

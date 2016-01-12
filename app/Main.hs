@@ -29,8 +29,8 @@ main =
             params = zip uids (repeat ())
             -- params = zip uids (repeat INF)
             -- userParams = zip params genBools
-            userParams = [((UID 1, ()), ([True] ++ repeat False, [True,  False, True,  False, True]))
-                         ,((UID 2, ()), ([True] ++ repeat False, [True,  False, False, False, False]))
+            userParams = [((UID 1, ()), ([True] ++ repeat False, [False,  True, True,  False, True]))
+                         ,((UID 2, ()), ([True] ++ repeat False, [False,  False, False, False, False]))
                          -- ,((UID 3, ()), ([True] ++ repeat False, [False, True,  True]))
                          ]
             usrs = map initUser userParams
@@ -43,5 +43,5 @@ main =
         mapM_ print $ model^.users
         putStrLn ""
     where nusers = 4
-          nsteps = 7
+          nsteps = 8
           p = 0.5 -- for Tree Algorithms
