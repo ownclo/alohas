@@ -14,6 +14,7 @@ import Interface( ForwMsg(..)
 import Common( append )
 import User
 import qualified GiaStation as ST
+-- import qualified NoMemStation as ST
 
 data ModelState = ModelState {
         _forwChannel :: ForwChannel,
@@ -62,7 +63,7 @@ stepModel :: Model ()
 stepModel = stepUsersBefore
         >>= stepForwChannel
         >>= stepStation
-        >>= stepStatistics
+        -- >>= stepStatistics
         >>= stepBackChannel
         >>= stepUsersAfter
 

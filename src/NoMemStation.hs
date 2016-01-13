@@ -23,7 +23,7 @@ initStation :: Station
 initStation = Station
 
 stepStation :: [ForwMsg] -> State Station StationFeedback
-stepStation = return . (,[]) . recvMsgs
+stepStation = return . (,True,Nothing) . recvMsgs
 
 recvMsgs :: [ForwMsg] -> MsgResult
 recvMsgs []  = Empty

@@ -23,6 +23,7 @@ import Interface( UserID
                 )
 import Common( roll, isSuccess )
 import qualified TwoBufferQueue as MSG
+-- import qualified BoundedQueue as MSG
 
 import qualified BasicTreeUser as ALG
     ( UserState
@@ -39,15 +40,16 @@ type MsgQueue = MSG.MsgSource QMsg
 type MsgParams = MSG.MsgParams
 
 data User = User {
-        _userId      :: UserID,
-        _msgQPrms    :: MsgParams,
-        _msgQueue    :: MsgQueue,
-        _generateMsg :: [Bool],
-        _algState    :: ALG.UserState,
-        _transmit    :: Bool,  -- is attempting to transmit
-        _delays      :: Int,
-        _numMsgs     :: Int,
-        _needTick    :: Bool
+        _userId        :: UserID,
+        _msgQPrms      :: MsgParams,
+        _msgQueue      :: MsgQueue,
+        _generateMsg   :: [Bool],
+        _algState      :: ALG.UserState,
+        _transmit      :: Bool,  -- is attempting to transmit
+        _delays        :: Int,
+        _numMsgs       :: Int,
+        _realWindow    :: Bool,
+        _reconstructed :: Bool
     } deriving Show
 
 makeLenses ''User
@@ -64,15 +66,15 @@ initUser ((uid, mqLen), (msgGen, transmitGen)) = User {
         _transmit = False,
         _delays = 0,
         _numMsgs = 0,
-        _needTick = True
+        _realWindow = True,
+        _reconstructed = False
     }
 
 stepUserBefore :: State User (Maybe ForwMsg)
 stepUserBefore = do
     mmsg <- maybeTransmit =<< use msgQueue
-    willTick <- use needTick
+    willTick <- use realWindow
     when willTick $ zoom msgQueue $ MSG.tickDelays tick
-    maybeGenerateMsg
     return mmsg
 
 maybeTransmit :: MsgQueue -> State User (Maybe ForwMsg)
@@ -87,7 +89,9 @@ maybeGenerateMsg :: State User ()
 maybeGenerateMsg = do
     mq <- use msgQueue
     mqPrms <- use msgQPrms
-    when (MSG.canGenerate mqPrms mq) $ do
+    -- XXX: we can not allow a message to be generated in a skipped window.
+    aRealWindow <- use realWindow
+    when (MSG.canGenerate mqPrms mq && aRealWindow) $ do
         willGenerate <- roll generateMsg
         when willGenerate $ do
             msg <- uses userId newMsg
@@ -100,22 +104,51 @@ tick :: QMsg -> QMsg
 tick = _1 +~ 1
 
 stepUserAfter :: StationFeedback -> State User ()
-stepUserAfter (result, transmittedWindow) = do
+stepUserAfter (result, transmittedWindow, mReconstructed) = do
     wasTransmit <- use transmit
-    needTick .= transmittedWindow
+    rec <- use reconstructed
+    realWindow .= transmittedWindow
     zoom algState $ ALG.stepUserAfter result wasTransmit
     forceStats
-    canShift <- zoom algState $ ALG.canShift MSG.sourceType result wasTransmit
+
+    -- XXX: generate need to be called before BoundedQueue.dropMsg,
+    -- because doing otherwise would allow a user to transmit & generate
+    -- a message in an empty queue in a single round.
+    -- For 2BQ that is not the case, 
+    maybeGenerateMsg
+
     when (isSuccess result && wasTransmit) $ do
-        (!cDelay, _msg) <- fromJust . MSG.getTransmit <$> use msgQueue
-        delays += cDelay
-        numMsgs += 1
-        needTick .= True
+        -- If the message was already reconstructed, does not agregate
+        -- message delay statistics, but drop the flag back to False.
+        if not rec then saveMsgDelay else reconstructed .= False
         zoom msgQueue MSG.dropMsg
+
+    myUserId <- use userId
+    when (msgReconstructed myUserId mReconstructed) $ do
+        saveMsgDelay
+        reconstructed .= True
+
     -- XXX: SHIFT FOR TBQ IS NOT PERFORMED UNTIL CONFLICT IS OVER,
     -- whereas for ordinary queue a shift is performed immediately
     -- after successful transmission.
-    when canShift $ zoom msgQueue MSG.shiftTransmit
+    canShift <- zoom algState $ ALG.canShift MSG.sourceType result wasTransmit
+    when canShift $ do
+        -- XXX: when there is time for shifting (after the end of conflict
+        -- for TBQ or after 'virtual' or 'real' success for BoundedQueue,
+        -- even if conflict ended with 'virtual' window, one needs to tick
+        -- delays.
+        realWindow .= True
+        zoom msgQueue MSG.shiftTransmit
+
+msgReconstructed :: UserID -> Maybe UserID -> Bool
+msgReconstructed _ Nothing = False
+msgReconstructed myUid (Just reconstructedUid) = reconstructedUid == myUid
+
+saveMsgDelay :: State User ()
+saveMsgDelay = do
+    (!cDelay, _msg) <- fromJust . MSG.getTransmit <$> use msgQueue
+    delays += cDelay
+    numMsgs += 1
 
 forceStats :: State User ()
 forceStats = do

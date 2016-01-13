@@ -14,9 +14,11 @@ data MsgResult = Empty
                | Conflict [UserID]
                deriving (Eq, Show)
 
--- second element is an indicator as to whether the window should be
+-- Second element is an indicator as to whether the window should be
 -- counted in statistics.
-type StationFeedback = (MsgResult, Bool)
+-- ThirdElement is an indicator if another message was preliminarily
+-- reconstructed.
+type StationFeedback = (MsgResult, Bool, Maybe UserID)
 
 data MsgSourceType = BoundedQueue
                    | TwoBufferQueue

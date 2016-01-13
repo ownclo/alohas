@@ -25,6 +25,8 @@ library
                      , TreeCSMACD
                      , BasicTreeUser
                      , TwoBufferQueue
+                     , NoMemStation
+                     , GiaStation
   build-depends:       base >= 4.7 && < 5
                      , lens
                      , random

@@ -12,6 +12,7 @@ module TreeCSMACD
 
     -- GiaStation
     , leftUndef
+    , getNodeFromLabel
     -- testing
     ,treeFromResults
     ,treeFromResults'
@@ -111,6 +112,15 @@ leftUndef _ = Nothing
 updateLabel :: Maybe (Tree a) -> Label -> Label
 updateLabel Nothing _ = []
 updateLabel _ lbl = lbl
+
+getNodeFromLabel :: Label -> Tree a -> Maybe (Tree a)
+getNodeFromLabel lbl = getNodeFromPath $ reverse lbl
+
+getNodeFromPath :: Label -> Tree a -> Maybe (Tree a)
+getNodeFromPath [] t = Just t
+getNodeFromPath (True:ls)  (CNode _ _ l _r) = getNodeFromPath ls l
+getNodeFromPath (False:ls) (CNode _ _ _l r) = getNodeFromPath ls r
+getNodeFromPath _ _ = Nothing
 
 canTransmit :: Label -> Maybe (Tree a) -> Bool
 canTransmit _ Nothing = True

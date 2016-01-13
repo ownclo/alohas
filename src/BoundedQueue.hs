@@ -28,11 +28,8 @@ storeGenerate a = modify (++ [a])
 getTransmit :: BQ a -> Maybe a
 getTransmit = listToMaybe
 
-shiftTransmit' :: BQ a -> BQ a
-shiftTransmit' = tail
-
 shiftTransmit :: State (BQ a) ()
-shiftTransmit = modify shiftTransmit'
+shiftTransmit = modify tail
 
 tickDelays :: (a -> a) -> State (BQ a) ()
 tickDelays tick = modify $ fmap tick
