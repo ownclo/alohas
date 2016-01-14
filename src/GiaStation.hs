@@ -13,6 +13,7 @@ import Control.Lens
 import Control.Monad.State.Strict
 import Data.List( (\\) )
 
+import Common( isConflict )
 import Interface( ForwMsg(..)
                 , UserID
                 , StationFeedback
@@ -47,17 +48,43 @@ stepStation input = do
                 let isLeft = head lbl  -- == True
                 -- Left == user decided to retransmit immediately.
                 if isLeft then do
-                      -- It can be proven that when current leaf is left
-                      -- one, the brother node is a) present and b) it is
-                      -- Undef. Further, by construction, the payload of
-                      -- the Undef node is the same as its parent node, so
-                      -- for interference cancellation one can use it's
-                      -- payload and input.
-                      brother <- brotherNode lbl <$> use tree
-                      let Just (Undef _broLabel parentInput) = brother
-                          mReconstructed = tryReconstructSignal parentInput inp
-                      return (True, mReconstructed)
-                  else return (False, Nothing)
+                    -- It can be proven that when current leaf is left
+                    -- one, the brother node is a) present and b) it is
+                    -- Undef. Further, by construction, the payload of
+                    -- the Undef node is the same as its parent node, so
+                    -- for interference cancellation one can use it's
+                    -- payload and input.
+                    brother <- brotherNode lbl <$> use tree
+                    let Just (Undef _broLabel parentInput) = brother
+                        mReconstructed = tryReconstructSignal parentInput inp
+                    return (True, mReconstructed)
+                else return (False, Nothing)
+            Just _ -> error "leftUndef is not undef, impossible"
+        return (msgResult, useWindow, mReconstructed)
+
+stepStationModified :: StationInput -> State Station StationFeedback
+stepStationModified input = do
+        let msgResult = recvMsgs input
+            inp = inputSignals input
+        mt <- use tree
+        let cur = leftUndef =<< mt
+        tree %= updateTree msgResult inp
+        (useWindow, mReconstructed) <- case cur of
+            Nothing -> return (True, Nothing)
+            Just (Undef lbl _minp) -> do
+                let isLeft = head lbl  -- == True
+                -- Left == user decided to retransmit immediately.
+                brother <- brotherNode lbl <$> use tree
+                if isLeft then do
+                    let Just (Undef _broLabel parentInput) = brother
+                        mReconstructed = tryReconstructSignal parentInput inp
+                    return (True, mReconstructed)
+                else do
+                    let useWindow = isConflict msgResult && not isEmptyBrother
+                        isEmptyBrother = case brother of
+                                             Just (ELeaf _ _) -> True
+                                             _ -> False
+                    return (useWindow, Nothing)
             Just _ -> error "leftUndef is not undef, impossible"
         return (msgResult, useWindow, mReconstructed)
 

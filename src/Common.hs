@@ -31,6 +31,10 @@ isConflict :: MsgResult -> Bool
 isConflict (Conflict _) = True
 isConflict _ = False
 
+isEmpty :: MsgResult -> Bool
+isEmpty Empty = True
+isEmpty _ = False
+
 isSuccess :: MsgResult -> Bool
 isSuccess (Success _) = True
 isSuccess _ = False

@@ -63,7 +63,7 @@ stepModel :: Model ()
 stepModel = stepUsersBefore
         >>= stepForwChannel
         >>= stepStation
-        -- >>= stepStatistics
+        >>= stepStatistics
         >>= stepBackChannel
         >>= stepUsersAfter
 
