@@ -8,23 +8,21 @@ module GiaStation
     ) where
 
 
-import Control.Applicative( (<$>) )
 import Control.Lens
 import Control.Monad.State.Strict
-import Data.List( (\\) )
+import Data.List( (\\), foldl1' )
 
-import Common( isConflict )
-import Interface( ForwMsg(..)
+import Interface( ForwSignal(..)
+                , ForwMsg(..)
                 , UserID
                 , StationFeedback
                 , MsgResult(..)
                 )
 import TreeCSMACD
+import Signals
 
-type StationInput = [ForwMsg]
 
-type InputSignals = [UserID]
-type StationTree = Maybe (Tree InputSignals)
+type StationTree = Maybe (Tree ForwSignal)
 
 data Station = Station {
         _tree :: StationTree
@@ -35,66 +33,54 @@ makeLenses ''Station
 initStation :: Station
 initStation = Station initTree
 
-stepStation :: StationInput -> State Station StationFeedback
+stepStation :: ForwSignal -> State Station StationFeedback
 stepStation input = do
         let msgResult = recvMsgs input
-            inp = inputSignals input
         mt <- use tree
-        let cur = leftUndef =<< mt
-        tree %= updateTree msgResult inp
-        (useWindow, mReconstructed) <- case cur of
-            Nothing -> return (True, Nothing)
-            Just (Undef lbl _minp) -> do
-                let isLeft = head lbl  -- == True
-                -- Left == user decided to retransmit immediately.
-                if isLeft then do
-                    -- It can be proven that when current leaf is left
-                    -- one, the brother node is a) present and b) it is
-                    -- Undef. Further, by construction, the payload of
-                    -- the Undef node is the same as its parent node, so
-                    -- for interference cancellation one can use it's
-                    -- payload and input.
-                    brother <- brotherNode lbl <$> use tree
-                    let Just (Undef _broLabel parentInput) = brother
-                        mReconstructed = tryReconstructSignal parentInput inp
-                    return (True, mReconstructed)
-                else return (False, Nothing)
-            Just _ -> error "leftUndef is not undef, impossible"
+        tree %= updateTree msgResult input
+        let (useWindow, mReconstructed) = stepStationInternal mt input
         return (msgResult, useWindow, mReconstructed)
 
-stepStationModified :: StationInput -> State Station StationFeedback
-stepStationModified input = do
-        let msgResult = recvMsgs input
-            inp = inputSignals input
-        mt <- use tree
-        let cur = leftUndef =<< mt
-        tree %= updateTree msgResult inp
-        (useWindow, mReconstructed) <- case cur of
-            Nothing -> return (True, Nothing)
-            Just (Undef lbl _minp) -> do
-                let isLeft = head lbl  -- == True
-                -- Left == user decided to retransmit immediately.
-                brother <- brotherNode lbl <$> use tree
-                if isLeft then do
-                    let Just (Undef _broLabel parentInput) = brother
-                        mReconstructed = tryReconstructSignal parentInput inp
-                    return (True, mReconstructed)
-                else do
-                    let useWindow = isConflict msgResult && not isEmptyBrother
-                        isEmptyBrother = case brother of
-                                             Just (ELeaf _ _) -> True
-                                             _ -> False
-                    return (useWindow, Nothing)
-            Just _ -> error "leftUndef is not undef, impossible"
-        return (msgResult, useWindow, mReconstructed)
+stepStationInternal :: StationTree -> ForwSignal -> (Bool, Maybe UserID)
+stepStationInternal mt input =
+    case leftUndef =<< mt of
+        Nothing -> (True, Nothing)
+        Just (Undef lbl _minp) ->
+            let isLeft = head lbl  -- == True
+                brother = brotherNode lbl mt in
+            -- Left == user decided to retransmit immediately.
+            if isLeft then
+                -- It can be proven that when current leaf is left
+                -- one, the brother node is a) present and b) it is
+                -- Undef. Further, by construction, the payload of
+                -- the Undef node is the same as its parent node, so
+                -- for interference cancellation one can use it's
+                -- payload and input.
+                let Just (Undef _broLabel parentInput) = brother
+                    mReconstructed = tryReconstructSignal parentInput input
+                in (True, mReconstructed)
+            -- Right == user decided to transmit later
+            else (useWindowOnRightNode input brother, Nothing)
+        Just _ -> error "leftUndef is not undef, impossible"
 
-recvMsgs :: StationInput -> MsgResult
-recvMsgs []  = Empty
-recvMsgs [ForwMsg uid] = Success uid
-recvMsgs ls   = Conflict $ map _uid ls
+-- SICTA
+useWindowOnRightNode :: ForwSignal -> StationTree -> Bool
+useWindowOnRightNode _ _ = False
 
-inputSignals :: StationInput -> InputSignals
-inputSignals = map _uid
+-- RSICTA
+useWindowOnRightNodeRSicta :: ForwSignal -> StationTree -> Bool
+useWindowOnRightNodeRSicta inp brother = isConflictInput inp
+                                      && not (isEmptyBrother brother)
+    where isEmptyBrother (Just (ELeaf _ _)) = True
+          isEmptyBrother _ = False
+
+ns :: Double
+ns = 1.0 - qs where qs = 0.3
+
+recvMsgs :: ForwSignal -> MsgResult
+recvMsgs (ForwSignal [] _) = Empty
+recvMsgs (ForwSignal [ForwMsg uid] n) | n <= ns = Success uid
+recvMsgs (ForwSignal ls _) = Conflict $ map _uid ls
 
 -- get the brother node in the tree
 -- e.g. tree: a - b
@@ -107,9 +93,28 @@ brotherNode [] _ = Nothing  -- root has no brother node
 brotherNode _lbl Nothing = Nothing
 brotherNode (lastLabel:rst) (Just t) = getNodeFromLabel (not lastLabel:rst) t
 
-tryReconstructSignal :: InputSignals -> InputSignals -> Maybe UserID
-tryReconstructSignal parent left = maybeReconstruct $ parent \\ left
+tryReconstructSignal :: ForwSignal -> ForwSignal -> Maybe UserID
+tryReconstructSignal parent left = maybeReconstruct $ subtractSignals parent left
 
-maybeReconstruct :: InputSignals -> Maybe UserID
-maybeReconstruct [s] = Just s
-maybeReconstruct _ = Nothing
+maybeReconstruct :: ForwSignal -> Maybe UserID
+maybeReconstruct s = case recvMsgs s of
+                         Success uid -> Just uid
+                         _ -> Nothing
+
+isConflictInput :: ForwSignal -> Bool
+isConflictInput s = case recvMsgs s of
+                        Conflict _ -> True
+                        _ -> False
+
+-- backward modulation on receiver
+recoverSignal :: ForwSignal -> ForwSignal
+recoverSignal s = case recvMsgs s of
+                      Success uid -> ForwSignal [ForwMsg uid] 0.0
+                      _ -> s
+
+-- accepts a fully completed subtree (high one!) and returns
+-- its parent input free from noise
+eliminateNoiseOnBrother :: StationTree -> ForwSignal
+eliminateNoiseOnBrother bro = foldl1' addSignals noiselessSuccesses
+        where noiselessSuccesses = map recoverSignal successes
+              successes = successLeafs bro

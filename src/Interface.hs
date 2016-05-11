@@ -9,6 +9,13 @@ data MsgQueueLen = INF | Bounded Int
 data ForwMsg = ForwMsg { _uid :: UserID }
   deriving (Show, Eq)
 
+type Noise = Double
+
+data ForwSignal = ForwSignal {
+        _userInput :: [ForwMsg],
+        _noise :: Noise
+    } deriving (Eq, Show)
+
 data MsgResult = Empty
                | Success UserID
                | Conflict [UserID]

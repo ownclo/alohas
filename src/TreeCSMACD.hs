@@ -13,6 +13,10 @@ module TreeCSMACD
     -- GiaStation
     , leftUndef
     , getNodeFromLabel
+
+    -- Noise elimination
+    , successLeafs
+
     -- testing
     ,treeFromResults
     ,treeFromResults'
@@ -137,3 +141,13 @@ canTransmit lbl (Just t) =
 -- user happened just before.
 decideTransmit :: Bool -> Label -> Label
 decideTransmit = (:)
+
+successLeafs :: Maybe (Tree a) -> [a]
+successLeafs Nothing = []
+successLeafs (Just t) = successLeafs' t
+
+successLeafs' :: Tree a -> [a]
+successLeafs' (ELeaf _ _) = []
+successLeafs' (Undef _ _) = []
+successLeafs' (SLeaf _ a) = [a]
+successLeafs' (CNode _ _ l r) = successLeafs' l ++ successLeafs' r

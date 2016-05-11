@@ -8,24 +8,25 @@ import Control.Lens
 
 import Data.Maybe( maybeToList )
 
-import Interface( ForwMsg(..)
+import Interface( ForwMsg
+                , ForwSignal
                 , StationFeedback
                 )
 import Common( append )
 import User
-import qualified GiaStation as ST
--- import qualified NoMemStation as ST
+
+-- import qualified GiaStation as ST
+import qualified NoMemStation as ST
+
+import qualified NoiselessChannel as CH
 
 data ModelState = ModelState {
-        _forwChannel :: ForwChannel,
+        _forwChannel :: CH.Channel,
         _backChannel :: BackChannel,
         _station     :: ST.Station,
         _users       :: [User],
         _stats       :: Stats
     } deriving Show
-
-data ForwChannel = ForwChannel
-  deriving Show
 
 data BackChannel = BackChannel
   deriving Show
@@ -41,7 +42,7 @@ type Model = State ModelState
 
 initModel :: [User] -> ModelState
 initModel usrs = ModelState {
-        _forwChannel = ForwChannel,
+        _forwChannel = CH.initChannel,
         _backChannel = BackChannel,
         _station = ST.initStation,
         _users = usrs,
@@ -63,17 +64,17 @@ stepModel :: Model ()
 stepModel = stepUsersBefore
         >>= stepForwChannel
         >>= stepStation
-        >>= stepStatistics
+        -- >>= stepStatistics
         >>= stepBackChannel
         >>= stepUsersAfter
 
 stepUsersBefore :: Model [ForwMsg]
 stepUsersBefore = zoom (users.traversed) $ maybeToList <$> stepUserBefore
 
-stepForwChannel :: [ForwMsg] -> Model [ForwMsg]
-stepForwChannel = zoom forwChannel . return
+stepForwChannel :: [ForwMsg] -> Model ForwSignal
+stepForwChannel = zoom forwChannel . CH.stepChannel
 
-stepStation :: [ForwMsg] -> Model StationFeedback
+stepStation :: ForwSignal -> Model StationFeedback
 stepStation = zoom station . ST.stepStation
 
 stepStatistics :: StationFeedback -> Model StationFeedback

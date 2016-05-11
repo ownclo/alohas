@@ -25,8 +25,11 @@ library
                      , TreeCSMACD
                      , BasicTreeUser
                      , TwoBufferQueue
+                     , BoundedQueue
                      , NoMemStation
                      , GiaStation
+                     , NoiselessChannel
+                     , NoisyChannel
   build-depends:       base >= 4.7 && < 5
                      , lens
                      , random
@@ -36,7 +39,7 @@ library
 executable new-template-exe
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -O3 -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -O3
   build-depends:       base
                      , lens
                      , random

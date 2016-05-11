@@ -22,8 +22,8 @@ import Interface( UserID
                 , StationFeedback
                 )
 import Common( roll, isSuccess )
-import qualified TwoBufferQueue as MSG
--- import qualified BoundedQueue as MSG
+-- import qualified TwoBufferQueue as MSG
+import qualified BoundedQueue as MSG
 
 import qualified BasicTreeUser as ALG
     ( UserState
