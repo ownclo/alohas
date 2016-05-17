@@ -124,7 +124,8 @@ stepUserAfter (result, transmittedWindow, mReconstructed) = do
         zoom msgQueue MSG.dropMsg
 
     myUserId <- use userId
-    when (msgReconstructed myUserId mReconstructed) $ do
+    when (msgReconstructed myUserId mReconstructed && not wasTransmit) $ do
+        -- TODO: handle two ack's (wasTransmit && mReconstructed -> second ack)
         saveMsgDelay
         reconstructed .= True
 

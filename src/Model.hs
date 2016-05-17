@@ -15,10 +15,11 @@ import Interface( ForwMsg
 import Common( append )
 import User
 
--- import qualified GiaStation as ST
-import qualified NoMemStation as ST
+import qualified GiaStation as ST
+-- import qualified NoMemStation as ST
 
-import qualified NoiselessChannel as CH
+import qualified NoisyChannel as CH
+-- import qualified NoiselessChannel as CH
 
 data ModelState = ModelState {
         _forwChannel :: CH.Channel,
@@ -40,17 +41,17 @@ makeLenses ''ModelState
 
 type Model = State ModelState
 
-initModel :: [User] -> ModelState
-initModel usrs = ModelState {
-        _forwChannel = CH.initChannel,
+initModel :: Double -> [Double] -> [User] -> ModelState
+initModel qs noiseGen usrs = ModelState {
+        _forwChannel = CH.initChannel noiseGen,
         _backChannel = BackChannel,
-        _station = ST.initStation,
+        _station = ST.initStation qs,
         _users = usrs,
         _stats = Stats []
     }
 
-runModel :: Int -> [User] -> ModelState
-runModel nsteps usrs = execState steps $ initModel usrs
+runModel :: Double -> [Double] -> Int -> [User] -> ModelState
+runModel qs noiseGen nsteps usrs = execState steps $ initModel qs noiseGen usrs
     where steps = replicateM_ nsteps stepModel
 
 presentModel :: Int -> [UserParams] -> ModelState -> ModelState

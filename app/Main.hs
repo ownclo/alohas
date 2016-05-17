@@ -6,7 +6,7 @@ import Control.Arrow( (***) )
 import Control.Lens
 
 -- import System.Environment( getArgs )
-import System.Random( newStdGen, split )
+import System.Random( newStdGen, split, randoms )
 import Text.Printf( printf )
 
 import Model
@@ -54,14 +54,18 @@ mainPerf :: IO ()
 mainPerf =
        do
        -- forM_ [0.85, 0.87, 0.9, 1.0] $ \lambda -> do
-       forM_ [0.3, 0.31, 0.32, 0.33, 0.34] $ \lambda -> do
+       forM_ [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.62, 0.63, 0.65, 0.66, 0.67] $ \lambda -> do
+       -- forM_ [0.3, 0.31, 0.32, 0.33, 0.34] $ \lambda -> do
        -- forM_ [0, 1 .. 9] $ \nsteps -> do
         -- let y = lambda; lambda = 1.0
         let y = lambda / fromIntegral nusers
         -- nsteps <- read . head <$> getArgs
         gens <- map split <$> replicateM nusers newStdGen
+        -- noiseGen <- randoms <$> newStdGen
+        noiseGen <- return $ repeat 0.0
         let genBools = map rstreams gens
             rstreams = randomBools y *** randomBools p
+            qs = 0.0
             uids = UID <$> [1..]
             -- params = zip uids (repeat ())
             params = zip uids (repeat INF)
@@ -71,7 +75,7 @@ mainPerf =
             --              -- ,((UID 3, ()), ([True] ++ repeat False, [False,  False, True ]))
             --              ]
             usrs = map initUser userParams
-            model = {- presentModel nsteps userParams $ -} runModel nsteps usrs
+            model = {- presentModel nsteps userParams $ -} runModel qs noiseGen nsteps usrs
             mDelay = meanDelay $ model^.users
             dlays = sum $ map (fromIntegral . view delays) $ model^.users :: Integer
             nmsgs = sum $ map (fromIntegral . view numMsgs) $ model^.users :: Integer
@@ -80,6 +84,6 @@ mainPerf =
         -- mapM_ print $ model^.users
         -- putStrLn ""
        putStrLn ""
-    where nusers = 10
-          nsteps = 100
+    where nusers = 100
+          nsteps = 1000000
           p = 0.5 -- for Tree Algorithms

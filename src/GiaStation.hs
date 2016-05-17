@@ -8,9 +8,10 @@ module GiaStation
     ) where
 
 
+import Control.Exception.Base( assert )
 import Control.Lens
 import Control.Monad.State.Strict
-import Data.List( (\\), foldl1' )
+import Data.List( foldl' )
 
 import Interface( ForwSignal(..)
                 , ForwMsg(..)
@@ -19,32 +20,41 @@ import Interface( ForwSignal(..)
                 , MsgResult(..)
                 )
 import TreeCSMACD
-import Signals
+import Prelude hiding( subtract )
+import Signals( subtract, add, getNoise )
 
 
 type StationTree = Maybe (Tree ForwSignal)
 
+-- 1. useWindow: will a window be skipped or not
+-- 2. mReconstructed: while on left leaf, maybe reconstructed right leaf
+-- 3. msgResult: result of current window (success, empty or conflict)
+-- 4. label: a signal stored for given node
+type StepResult = (Bool, Maybe UserID, MsgResult, ForwSignal)
+
 data Station = Station {
-        _tree :: StationTree
+        _tree :: StationTree,
+        _perror :: Double
     } deriving Show
 
 makeLenses ''Station
 
-initStation :: Station
-initStation = Station initTree
+initStation :: Double -> Station
+initStation qs = Station initTree qs
 
 stepStation :: ForwSignal -> State Station StationFeedback
 stepStation input = do
-        let msgResult = recvMsgs input
         mt <- use tree
-        tree %= updateTree msgResult input
-        let (useWindow, mReconstructed) = stepStationInternal mt input
-        return (msgResult, useWindow, mReconstructed)
+        qs <- use perror
+        let (useWindow, mReconstructed, result, signal) = stepStationInternal qs mt input
+        tree %= updateTree result signal
+        return (result, useWindow, mReconstructed)
 
-stepStationInternal :: StationTree -> ForwSignal -> (Bool, Maybe UserID)
-stepStationInternal mt input =
+-- TODO: cancel noise for SICTA and RSICTA in successful left leafs.
+stepStationInternal :: Double -> StationTree -> ForwSignal -> StepResult
+stepStationInternal qs mt input =
     case leftUndef =<< mt of
-        Nothing -> (True, Nothing)
+        Nothing -> (True, Nothing, recvMsgs qs input, input)
         Just (Undef lbl _minp) ->
             let isLeft = head lbl  -- == True
                 brother = brotherNode lbl mt in
@@ -57,30 +67,51 @@ stepStationInternal mt input =
                 -- for interference cancellation one can use it's
                 -- payload and input.
                 let Just (Undef _broLabel parentInput) = brother
-                    mReconstructed = tryReconstructSignal parentInput input
-                in (True, mReconstructed)
+                    -- TODO: Check for user's ability to handle two acks
+                    -- (once while in left branch with sum noises, second
+                    -- in right branch with parent noise only)
+                    mReconstructed = tryReconstructSignal qs parentInput input
+                    -- mReconstructed = Nothing
+                in (True, mReconstructed, recvMsgs qs input, input)
             -- Right == user decided to transmit later
-            else (useWindowOnRightNode input brother, Nothing)
+            else (stepRightNode qs input mt)
         Just _ -> error "leftUndef is not undef, impossible"
 
+stepRightNode :: Double -> ForwSignal -> StationTree -> StepResult
+stepRightNode = stepRightNodeSicta
+
 -- SICTA
-useWindowOnRightNode :: ForwSignal -> StationTree -> Bool
-useWindowOnRightNode _ _ = False
+stepRightNodeSicta :: Double -> ForwSignal -> StationTree -> StepResult
+stepRightNodeSicta qs inp _ = (False, Nothing, recvMsgs qs inp, inp)
 
 -- RSICTA
-useWindowOnRightNodeRSicta :: ForwSignal -> StationTree -> Bool
-useWindowOnRightNodeRSicta inp brother = isConflictInput inp
-                                      && not (isEmptyBrother brother)
+stepRightNodeRSicta :: Double -> ForwSignal -> StationTree -> StepResult
+stepRightNodeRSicta qs inp mt = (useWindow, Nothing, recvMsgs qs inp, inp)
     where isEmptyBrother (Just (ELeaf _ _)) = True
           isEmptyBrother _ = False
 
-ns :: Double
-ns = 1.0 - qs where qs = 0.3
+          brother = bro mt
+          useWindow = isConflictInput qs inp && not (isEmptyBrother brother)
 
-recvMsgs :: ForwSignal -> MsgResult
-recvMsgs (ForwSignal [] _) = Empty
-recvMsgs (ForwSignal [ForwMsg uid] n) | n <= ns = Success uid
-recvMsgs (ForwSignal ls _) = Conflict $ map _uid ls
+-- My modification
+stepRightNodeNoiseElimination :: Double -> ForwSignal -> StationTree -> StepResult
+stepRightNodeNoiseElimination qs _inp mt =
+        (False, mReconstruct, recvMsgs qs restored, restored)
+    where left = eliminateNoiseOnBrother qs brother
+          Just (Undef _curLabel parent) = leftUndef =<< mt
+          brother = bro mt
+          restored = assert (getNoise left == 0.0) $ parent `subtract` left
+          mReconstruct = maybeReconstruct qs restored
+
+-- XXX: works only if currentNode is RIGHT
+bro :: StationTree -> StationTree
+bro mt = brotherNode lbl mt
+    where Just (Undef lbl _minp) = leftUndef =<< mt
+
+recvMsgs :: Double -> ForwSignal -> MsgResult
+recvMsgs _ (ForwSignal [] _) = Empty
+recvMsgs qs (ForwSignal [ForwMsg uid] n) | n <= (1.0 - qs) = Success uid
+recvMsgs _ (ForwSignal ls _) = Conflict $ map _uid ls
 
 -- get the brother node in the tree
 -- e.g. tree: a - b
@@ -93,28 +124,30 @@ brotherNode [] _ = Nothing  -- root has no brother node
 brotherNode _lbl Nothing = Nothing
 brotherNode (lastLabel:rst) (Just t) = getNodeFromLabel (not lastLabel:rst) t
 
-tryReconstructSignal :: ForwSignal -> ForwSignal -> Maybe UserID
-tryReconstructSignal parent left = maybeReconstruct $ subtractSignals parent left
+tryReconstructSignal :: Double -> ForwSignal -> ForwSignal -> Maybe UserID
+tryReconstructSignal qs parent left = maybeReconstruct qs $ parent `subtract` left
 
-maybeReconstruct :: ForwSignal -> Maybe UserID
-maybeReconstruct s = case recvMsgs s of
-                         Success uid -> Just uid
-                         _ -> Nothing
+maybeReconstruct :: Double -> ForwSignal -> Maybe UserID
+maybeReconstruct qs s = case recvMsgs qs s of
+                            Success uid -> Just uid
+                            _ -> Nothing
 
-isConflictInput :: ForwSignal -> Bool
-isConflictInput s = case recvMsgs s of
-                        Conflict _ -> True
-                        _ -> False
+-- FOR RSICTA
+isConflictInput :: Double -> ForwSignal -> Bool
+isConflictInput qs s = case recvMsgs qs s of
+                           Conflict _ -> True
+                           _ -> False
 
 -- backward modulation on receiver
-recoverSignal :: ForwSignal -> ForwSignal
-recoverSignal s = case recvMsgs s of
-                      Success uid -> ForwSignal [ForwMsg uid] 0.0
-                      _ -> s
+recoverSignal :: Double -> ForwSignal -> ForwSignal
+recoverSignal qs s = case recvMsgs qs s of
+                         Success uid -> ForwSignal [ForwMsg uid] 0.0
+                         _ -> s
 
 -- accepts a fully completed subtree (high one!) and returns
 -- its parent input free from noise
-eliminateNoiseOnBrother :: StationTree -> ForwSignal
-eliminateNoiseOnBrother bro = foldl1' addSignals noiselessSuccesses
-        where noiselessSuccesses = map recoverSignal successes
-              successes = successLeafs bro
+eliminateNoiseOnBrother :: Double -> StationTree -> ForwSignal
+eliminateNoiseOnBrother qs t = foldl' add emptySignal noiselessSuccesses
+        where noiselessSuccesses = map (recoverSignal qs) successes
+              successes = successLeafs t
+              emptySignal = ForwSignal [] 0.0
