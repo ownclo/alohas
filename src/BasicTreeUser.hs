@@ -25,6 +25,9 @@ initState gen = UserState {
         _tree  = initTree
     }
 
+cleanState :: UserState -> UserState
+cleanState (UserState _gen lbl t) = UserState [] lbl t
+
 willTransmitMsg :: State UserState Bool
 willTransmitMsg = do
     lbl <- use label

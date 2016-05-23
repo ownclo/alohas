@@ -6,7 +6,7 @@ import Control.Lens
 import Control.Monad.State
 
 import Data.List( genericLength )
-import Interface( MsgResult(..) )
+import Interface( MsgResult(..), UserID )
 
 roll :: MonadState s m => Lens' s [a] -> m a
 roll alens = do
@@ -16,6 +16,9 @@ roll alens = do
 
 append :: MonadState s m => Lens' s [a] -> a -> m ()
 append alens val = alens <>= [val]
+
+appendAll :: MonadState s m => Lens' s [a] -> [a] -> m ()
+appendAll alens lst = alens <>= lst
 
 prepend :: MonadState s m => Lens' s [a] -> a -> m ()
 prepend alens val = alens %= (val:)
@@ -38,3 +41,7 @@ isEmpty _ = False
 isSuccess :: MsgResult -> Bool
 isSuccess (Success _) = True
 isSuccess _ = False
+
+isMySuccess :: MsgResult -> UserID -> Bool
+isMySuccess (Success uid) myUid = uid == myUid
+isMySuccess _ _ = False

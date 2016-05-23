@@ -27,5 +27,8 @@ data MsgResult = Empty
 -- reconstructed.
 type StationFeedback = (MsgResult, Bool, Maybe UserID)
 
+-- (isOver, realWindow)
+type ModelFeedback = (Bool, Bool)
+
 data MsgSourceType = BoundedQueue
                    | TwoBufferQueue

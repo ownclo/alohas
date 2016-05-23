@@ -54,13 +54,6 @@ runModel :: Double -> [Double] -> Int -> [User] -> ModelState
 runModel qs noiseGen nsteps usrs = execState steps $ initModel qs noiseGen usrs
     where steps = replicateM_ nsteps stepModel
 
-presentModel :: Int -> [UserParams] -> ModelState -> ModelState
-presentModel nsteps userParams model = model & users .~ newUsers
-    where newUsers = map cleanUser' uparams
-          uparams = zip userParams usrs
-          usrs = model ^. users
-          cleanUser' = uncurry $ cleanUser nsteps
-
 stepModel :: Model ()
 stepModel = stepUsersBefore
         >>= stepForwChannel
@@ -76,7 +69,9 @@ stepForwChannel :: [ForwMsg] -> Model ForwSignal
 stepForwChannel = zoom forwChannel . CH.stepChannel
 
 stepStation :: ForwSignal -> Model StationFeedback
-stepStation = zoom station . ST.stepStation
+stepStation sig = do
+    (_, feedBack) <- zoom station $ ST.stepStation sig
+    return feedBack
 
 stepStatistics :: StationFeedback -> Model StationFeedback
 stepStatistics = zoom stats . stepStats

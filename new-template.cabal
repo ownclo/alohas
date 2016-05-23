@@ -16,18 +16,19 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Model
+                     , PoissonModel
                      , Random
                      , User
                      , Interface
+                     , TreeCSMACD
+                     , GiaStation
+                     , BasicTreeUser
   other-modules:       AlohaUser
                      , Common
                      , Lib
-                     , TreeCSMACD
-                     , BasicTreeUser
                      , TwoBufferQueue
                      , BoundedQueue
                      , NoMemStation
-                     , GiaStation
                      , NoiselessChannel
                      , NoisyChannel
                      , Signals
@@ -35,6 +36,7 @@ library
                      , lens
                      , random
                      , mtl
+                     , random-fu
   default-language:    Haskell2010
 
 executable new-template-exe
@@ -45,6 +47,7 @@ executable new-template-exe
                      , lens
                      , random
                      , mtl
+                     , random-fu
                      , new-template
   default-language:    Haskell2010
 

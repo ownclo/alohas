@@ -5,6 +5,7 @@ module GiaStation
     ( stepStation
     , Station
     , initStation
+    , tree
     ) where
 
 
@@ -17,6 +18,7 @@ import Interface( ForwSignal(..)
                 , ForwMsg(..)
                 , UserID
                 , StationFeedback
+                , ModelFeedback
                 , MsgResult(..)
                 )
 import TreeCSMACD
@@ -42,13 +44,15 @@ makeLenses ''Station
 initStation :: Double -> Station
 initStation qs = Station initTree qs
 
-stepStation :: ForwSignal -> State Station StationFeedback
+stepStation :: ForwSignal -> State Station (ModelFeedback, StationFeedback)
 stepStation input = do
         mt <- use tree
         qs <- use perror
         let (useWindow, mReconstructed, result, signal) = stepStationInternal qs mt input
         tree %= updateTree result signal
-        return (result, useWindow, mReconstructed)
+        isOver <- uses tree isResolved
+        let feedBack = (result, useWindow, mReconstructed)
+        return ((isOver, useWindow), feedBack)
 
 -- TODO: cancel noise for SICTA and RSICTA in successful left leafs.
 stepStationInternal :: Double -> StationTree -> ForwSignal -> StepResult
@@ -70,15 +74,15 @@ stepStationInternal qs mt input =
                     -- TODO: Check for user's ability to handle two acks
                     -- (once while in left branch with sum noises, second
                     -- in right branch with parent noise only)
-                    mReconstructed = tryReconstructSignal qs parentInput input
-                    -- mReconstructed = Nothing
+                    -- mReconstructed = tryReconstructSignal qs parentInput input
+                    mReconstructed = Nothing
                 in (True, mReconstructed, recvMsgs qs input, input)
             -- Right == user decided to transmit later
             else (stepRightNode qs input mt)
         Just _ -> error "leftUndef is not undef, impossible"
 
 stepRightNode :: Double -> ForwSignal -> StationTree -> StepResult
-stepRightNode = stepRightNodeSicta
+stepRightNode = stepRightNodeNoiseElimination
 
 -- SICTA
 stepRightNodeSicta :: Double -> ForwSignal -> StationTree -> StepResult
