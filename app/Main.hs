@@ -1,13 +1,14 @@
 module Main where
 
+import Control.Applicative
 import Control.Monad
--- import Control.Applicative
 -- import Control.Arrow( (***) )
 import Control.Lens
 -- import Data.Maybe( fromJust )
 
 -- import System.Environment( getArgs )
-import System.Random( newStdGen {-, split, randoms -} )
+import System.Exit( exitSuccess )
+import System.Random( newStdGen, {- split, -} randoms )
 import Text.Printf( printf )
 
 -- import Model
@@ -16,6 +17,7 @@ import Text.Printf( printf )
 -- import Interface( UserID(..), MsgQueueLen(..) )
 import PoissonModel
 import Random
+import Signals
 -- import GiaStation
 -- import TreeCSMACD
 -- import User
@@ -64,27 +66,31 @@ main = mainPoisson
 
 mainPoisson :: IO ()
 mainPoisson = do
-    putStrLn "#LAM       MEAN     DELAYS      TRANS      GENER      NCONF"
-    forM_ -- [0.1, 0.2, 0.3, 0.35,
-          [0.4, 0.45, 0.48, 0.5, 0.51,
+    putStrLn "#LAM       QS      SNR       MEAN     DELAYS      TRANS      GENER      NCONF"
+    forM_ [0.1, 0.15, 0.17, 0.18, 0.19, 0.2, 0.21, 0.24, 0.26, 0.28, 0.3, 0.35,
+           0.4, 0.45, 0.48, 0.5, 0.51,
            0.52, 0.54, 0.55, 0.56, 0.57, 0.58,
            0.6, 0.61, 0.62, 0.63, 0.65, 0.66, 0.67] $ \lambda -> do
         gen <- newStdGen -- bool transmission gen
         poissonGen <- newStdGen  -- poisson gen
+        randGen <- randoms <$> newStdGen
         let numGen = poissonStream lambda poissonGen
             -- lambda = 0.65 :: Double
             -- numGen = repeat 1  -- one message generated each time
-            noiseGen = repeat 0.0  -- no noise
-            qs = 0.0  -- probability of error
-            nsteps = 10000000 -- 10KK
+            noiseGen = repeat 1.0
+            nsteps = 1000000 -- 10KK
+            baseSnr = fromDb 6
+            l = 424 -- #bits, dunno why
+            qs = probError baseSnr l
 
-            model = runPoissonModel nsteps $ initPoissonModel numGen gen noiseGen qs
+            model = runPoissonModel nsteps $ initPoissonModel numGen gen noiseGen baseSnr randGen
             dlays = view delays model
             ngene = view totalGenerated model
             ntran = view transmitted model
             nconf = view nConflicts model
             meanD = fromIntegral dlays / fromIntegral ntran :: Double
-        void $ printf "%.2f %10.5f %10d %10d %10d %10d\n" lambda (meanD - 0.5) dlays ntran ngene nconf
+        void $ printf "%.2f %8.4f %8.2f %10.5f %10d %10d %10d %10d\n" lambda qs baseSnr (meanD - 0.5) dlays ntran ngene nconf
+        when (meanD > 30.0) exitSuccess
 
     -- print $ model^.curConflictLen
     -- print $ model^.curConflictNum

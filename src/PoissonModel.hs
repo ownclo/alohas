@@ -50,8 +50,8 @@ data PoissonModelState = PoissonModelState {
 makeLenses ''PoissonModelState
 
 
-initPoissonModel :: [Int] -> StdGen -> [Double] -> Double -> PoissonModelState
-initPoissonModel numGen boolGen noiseGen qs = PoissonModelState {
+initPoissonModel :: [Int] -> StdGen -> [Double] -> Double -> [Double] -> PoissonModelState
+initPoissonModel numGen boolGen noiseGen baseSnr stream = PoissonModelState {
         _pTransmit      = 0.5,
         _numMessages    = numGen,
         _stdGen         = boolGen,
@@ -68,7 +68,7 @@ initPoissonModel numGen boolGen noiseGen qs = PoissonModelState {
         _curConflictLen = 0,
         _curConflictNum = 0,
 
-        _station        = ST.initStation qs,
+        _station        = ST.initStation baseSnr stream,
         _channel        = CH.initChannel noiseGen
     }
 

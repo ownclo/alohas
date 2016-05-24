@@ -23,6 +23,7 @@ library
                      , TreeCSMACD
                      , GiaStation
                      , BasicTreeUser
+                     , Signals
   other-modules:       AlohaUser
                      , Common
                      , Lib
@@ -31,11 +32,11 @@ library
                      , NoMemStation
                      , NoiselessChannel
                      , NoisyChannel
-                     , Signals
   build-depends:       base >= 4.7 && < 5
                      , lens
                      , random
                      , mtl
+                     , erf
                      , random-fu
   default-language:    Haskell2010
 
@@ -48,6 +49,7 @@ executable new-template-exe
                      , random
                      , mtl
                      , random-fu
+                     , erf
                      , new-template
   default-language:    Haskell2010
 
