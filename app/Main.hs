@@ -67,29 +67,33 @@ main = mainPoisson
 mainPoisson :: IO ()
 mainPoisson = do
     putStrLn "#LAM       QS      SNR       MEAN     DELAYS      TRANS      GENER      NCONF"
-    forM_ [0.1, 0.15, 0.17, 0.18, 0.19, 0.2, 0.21, 0.24, 0.26, 0.28, 0.3, 0.35,
-           0.4, 0.45, 0.48, 0.5, 0.51,
-           0.52, 0.54, 0.55, 0.56, 0.57, 0.58,
-           0.6, 0.61, 0.62, 0.63, 0.65, 0.66, 0.67] $ \lambda -> do
+--     forM_ [0.1, 0.15, 0.17, 0.18, 0.19, 0.2, 0.21, 0.24, 0.26, 0.28, 0.3, 0.35,
+--            0.4, 0.45, 0.48, 0.5, 0.51,
+--            0.52, 0.54, 0.55, 0.56, 0.57, 0.58,
+--            0.6, 0.61, 0.62, 0.63, 0.65, 0.66, 0.67] $ \lambda -> do
+    forM_ [1,2,3,4,5,6,7,8,9,10] $ \nConf -> do
         gen <- newStdGen -- bool transmission gen
         poissonGen <- newStdGen  -- poisson gen
         randGen <- randoms <$> newStdGen
         let numGen = poissonStream lambda poissonGen
-            -- lambda = 0.65 :: Double
+            lambda = 0.65 :: Double
             -- numGen = repeat 1  -- one message generated each time
             noiseGen = repeat 1.0
             nsteps = 1000000 -- 10KK
-            baseSnr = fromDb 6
+            baseSnr = fromDb 10000
             l = 424 -- #bits, dunno why
             qs = probError baseSnr l
 
-            model = runPoissonModel nsteps $ initPoissonModel numGen gen noiseGen baseSnr randGen
+            model = runPoissonModel nsteps $ initPoissonModel nConf numGen gen noiseGen baseSnr randGen
             dlays = view delays model
             ngene = view totalGenerated model
             ntran = view transmitted model
             nconf = view nConflicts model
+            lConf = view lenConf model
+
             meanD = fromIntegral dlays / fromIntegral ntran :: Double
-        void $ printf "%.2f %8.4f %8.2f %10.5f %10d %10d %10d %10d\n" lambda qs baseSnr (meanD - 0.5) dlays ntran ngene nconf
+        -- void $ printf "%.2f %8.4f %8.2f %10.5f %10d %10d %10d %10d\n" lambda qs baseSnr (meanD - 0.5) dlays ntran ngene nconf
+        void $ printf "%d\t%5.3f\t%5.3f\t%d\t%d\n" nConf (fromIntegral dlays / fromIntegral ntran :: Double) (fromIntegral lConf / fromIntegral nconf :: Double) lConf nconf
         when (meanD > 30.0) exitSuccess
 
     -- print $ model^.curConflictLen

@@ -27,6 +27,9 @@ type PoissonModel = State PoissonModelState
 
 
 data PoissonModelState = PoissonModelState {
+        _nConf          :: Int,
+        _lenConf        :: Int,
+
         _numMessages    :: [Int],
         _pTransmit      :: Double,
         _stdGen         :: StdGen,
@@ -50,8 +53,11 @@ data PoissonModelState = PoissonModelState {
 makeLenses ''PoissonModelState
 
 
-initPoissonModel :: [Int] -> StdGen -> [Double] -> Double -> [Double] -> PoissonModelState
-initPoissonModel numGen boolGen noiseGen baseSnr stream = PoissonModelState {
+initPoissonModel :: Int -> [Int] -> StdGen -> [Double] -> Double -> [Double] -> PoissonModelState
+initPoissonModel nC numGen boolGen noiseGen baseSnr stream = PoissonModelState {
+        _nConf          = nC,
+        _lenConf        = 0,
+
         _pTransmit      = 0.5,
         _numMessages    = numGen,
         _stdGen         = boolGen,
@@ -95,7 +101,7 @@ stepModel = do
     conflictOver .= isOver
     when realWindow stepMessageGenerator
     when isOver stepStatistics
-    curConflictLen += 1
+    when realWindow $ curConflictLen += 1
     forceStats
 
 
@@ -108,6 +114,10 @@ stepStatistics = do
     nConflicts  += 1
     delays      += sumDelays
     transmitted += nConflict
+
+    curConfLen <- use curConflictLen
+    lenConf += curConfLen
+
     curConflictLen .= 0
 
 
@@ -126,18 +136,21 @@ stepMessageGenerator = do
     total <- use totalGenerated
     totalGenerated += numNewMsgs
     -- stream of messages with UIDs from 0 to infty
-    let newMessages = take numNewMsgs $ map newMsg [total + 1..]
-    appendAll pendingMsgs newMessages
-    pendingMsgs %= map tick
+    -- let newMessages = take numNewMsgs $ map newMsg [total + 1..]
+    -- appendAll pendingMsgs newMessages
+    -- pendingMsgs %= map tick
 
 
 startNewConflict :: PoissonModel ()
 startNewConflict = do
-    pending <- use pendingMsgs
+    -- pending <- use pendingMsgs
     pendingMsgs .= []
-    activeMsgs .= pending
+    nC <- use nConf
+    activeMsgs .= take nC (map newMsg [0..])
+    -- activeMsgs .= pending
 
-    users <- mapM newUser pending
+    -- users <- mapM newUser pending
+    users <- mapM newUser =<< use activeMsgs
     activeUsers .= users
     curConflictNum .= length users
 

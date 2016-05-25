@@ -79,8 +79,8 @@ stepStationInternal input = do
                 -- for interference cancellation one can use it's
                 -- payload and input.
                 let Just (Undef _broLabel parentInput) = brother
-                    mReconstructed = Nothing
-                -- mReconstructed <- tryReconstructSignal parentInput input
+                    -- mReconstructed = Nothing
+                mReconstructed <- tryReconstructSignal parentInput input
                 return (True, mReconstructed, recvMsgs isError input, input)
             -- Right == user decided to transmit later
             else return (stepRightNode isError input mt)
