@@ -78,13 +78,22 @@ stepStationInternal input = do
                 -- the Undef node is the same as its parent node, so
                 -- for interference cancellation one can use it's
                 -- payload and input.
-                let Just (Undef _broLabel parentInput) = brother
-                    -- mReconstructed = Nothing
-                mReconstructed <- tryReconstructSignal parentInput input
+                mReconstructed <- stepLeftNode input brother
                 return (True, mReconstructed, recvMsgs isError input, input)
             -- Right == user decided to transmit later
             else return (stepRightNode isError input mt)
         Just _ -> error "leftUndef is not undef, impossible"
+
+stepLeftNode :: ForwSignal -> StationTree -> State Station (Maybe UserID)
+stepLeftNode input (Just (Undef broLabel parentInput)) = do
+    let broSignal = parentInput `subtract` input
+    isError <- genIsError broSignal
+    Just t <- use tree
+
+    tree %= modifyNodeFromLabel broLabel broSignal
+    return $ maybeReconstruct isError broSignal
+stepLeftNode _ other = error $ show other
+-- stepLeftNode _ = return Nothing
 
 stepRightNode :: Bool -> ForwSignal -> StationTree -> StepResult
 stepRightNode = stepRightNodeNoiseElimination
@@ -109,6 +118,8 @@ stepRightNodeNoiseElimination qs _inp mt =
     where left = eliminateNoiseOnBrother brother
           Just (Undef _curLabel parent) = leftUndef =<< mt
           brother = bro mt
+          -- XXX: left won't have noise only if IC is itself noiseless
+          -- restored = {- assert (getNoise left == 0.0) $ -} parent `subtract` left
           restored = assert (getNoise left == 0.0) $ parent `subtract` left
           mReconstruct = maybeReconstruct qs restored
 
@@ -132,12 +143,6 @@ brotherNode :: Label -> StationTree -> StationTree
 brotherNode [] _ = Nothing  -- root has no brother node
 brotherNode _lbl Nothing = Nothing
 brotherNode (lastLabel:rst) (Just t) = getNodeFromLabel (not lastLabel:rst) t
-
-tryReconstructSignal :: ForwSignal -> ForwSignal -> State Station (Maybe UserID)
-tryReconstructSignal parent left = do
-        let right = parent `subtract` left
-        isError <- genIsError right
-        return $ maybeReconstruct isError right
 
 maybeReconstruct :: Bool -> ForwSignal -> Maybe UserID
 maybeReconstruct isError s = case recvMsgs isError s of

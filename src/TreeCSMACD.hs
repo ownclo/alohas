@@ -13,6 +13,7 @@ module TreeCSMACD
     -- GiaStation
     , leftUndef
     , getNodeFromLabel
+    , modifyNodeFromLabel
 
     -- Noise elimination
     , successLeafs
@@ -151,3 +152,19 @@ successLeafs' (ELeaf _ _) = []
 successLeafs' (Undef _ _) = []
 successLeafs' (SLeaf _ a) = [a]
 successLeafs' (CNode _ _ l r) = successLeafs' l ++ successLeafs' r
+
+modifyNodeFromLabel' :: Label -> a -> Tree a -> Maybe (Tree a)
+modifyNodeFromLabel' [] a t = Just $ modifyNode a t
+modifyNodeFromLabel' (True:ls)  a (CNode _ _ l _r) = modifyNodeFromLabel' ls a l
+modifyNodeFromLabel' (False:ls) a (CNode _ _ _l r) = modifyNodeFromLabel' ls a r
+modifyNodeFromLabel' _ _ _ = Nothing
+
+modifyNodeFromLabel :: Label -> a -> Maybe (Tree a) -> Maybe (Tree a)
+modifyNodeFromLabel _ _ Nothing = Nothing
+modifyNodeFromLabel l a (Just t) = modifyNodeFromLabel' l a t
+
+modifyNode :: a -> Tree a -> Tree a
+modifyNode a (ELeaf lbl _) = ELeaf lbl a
+modifyNode a (SLeaf lbl _) = SLeaf lbl a
+modifyNode a (Undef lbl _) = Undef lbl a
+modifyNode a (CNode lbl _ l r) = CNode lbl a l r
