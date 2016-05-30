@@ -41,17 +41,17 @@ makeLenses ''ModelState
 
 type Model = State ModelState
 
-initModel :: Double -> [Double] -> [Double] -> [User] -> ModelState
-initModel baseSnr gen noiseGen usrs = ModelState {
+initModel :: Double -> Double -> [Double] -> [Double] -> [User] -> ModelState
+initModel baseSnr subSnr gen noiseGen usrs = ModelState {
         _forwChannel = CH.initChannel noiseGen,
         _backChannel = BackChannel,
-        _station = ST.initStation baseSnr gen,
+        _station = ST.initStation baseSnr subSnr gen,
         _users = usrs,
         _stats = Stats []
     }
 
-runModel :: Double -> [Double] -> [Double] -> Int -> [User] -> ModelState
-runModel baseSnr gen noiseGen nsteps usrs = execState steps $ initModel baseSnr gen noiseGen usrs
+runModel :: Double -> Double -> [Double] -> [Double] -> Int -> [User] -> ModelState
+runModel baseSnr subSnr gen noiseGen nsteps usrs = execState steps $ initModel baseSnr subSnr gen noiseGen usrs
     where steps = replicateM_ nsteps stepModel
 
 stepModel :: Model ()

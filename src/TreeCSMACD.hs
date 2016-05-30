@@ -155,13 +155,13 @@ successLeafs' (CNode _ _ l r) = successLeafs' l ++ successLeafs' r
 
 modifyNodeFromLabel' :: Label -> a -> Tree a -> Maybe (Tree a)
 modifyNodeFromLabel' [] a t = Just $ modifyNode a t
-modifyNodeFromLabel' (True:ls)  a (CNode _ _ l _r) = modifyNodeFromLabel' ls a l
-modifyNodeFromLabel' (False:ls) a (CNode _ _ _l r) = modifyNodeFromLabel' ls a r
+modifyNodeFromLabel' (True:ls)  a (CNode lbl a' l r) = modifyNodeFromLabel' ls a l >>= Just . leftNode lbl a' r
+modifyNodeFromLabel' (False:ls) a (CNode lbl a' l r) = modifyNodeFromLabel' ls a r >>= Just . rightNode lbl a' l
 modifyNodeFromLabel' _ _ _ = Nothing
 
 modifyNodeFromLabel :: Label -> a -> Maybe (Tree a) -> Maybe (Tree a)
 modifyNodeFromLabel _ _ Nothing = Nothing
-modifyNodeFromLabel l a (Just t) = modifyNodeFromLabel' l a t
+modifyNodeFromLabel l a (Just t) = modifyNodeFromLabel' (reverse l) a t
 
 modifyNode :: a -> Tree a -> Tree a
 modifyNode a (ELeaf lbl _) = ELeaf lbl a

@@ -27,7 +27,7 @@ type PoissonModel = State PoissonModelState
 
 
 data PoissonModelState = PoissonModelState {
-        _nConf          :: Int,
+--         _nConf          :: Int,
         _lenConf        :: Int,
 
         _numMessages    :: [Int],
@@ -53,10 +53,10 @@ data PoissonModelState = PoissonModelState {
 makeLenses ''PoissonModelState
 
 
-initPoissonModel :: Int -> [Int] -> StdGen -> [Double] -> Double -> [Double] -> PoissonModelState
-initPoissonModel nC numGen boolGen noiseGen baseSnr stream = PoissonModelState {
-        _nConf          = nC,
-        _lenConf        = 0,
+initPoissonModel :: {- Int -> -} [Int] -> StdGen -> [Double] -> Double -> Double -> [Double] -> PoissonModelState
+initPoissonModel {- nC -} numGen boolGen noiseGen baseSnr subSnr stream = PoissonModelState {
+--         _nConf          = nC,
+         _lenConf        = 0,
 
         _pTransmit      = 0.5,
         _numMessages    = numGen,
@@ -74,7 +74,7 @@ initPoissonModel nC numGen boolGen noiseGen baseSnr stream = PoissonModelState {
         _curConflictLen = 0,
         _curConflictNum = 0,
 
-        _station        = ST.initStation baseSnr stream,
+        _station        = ST.initStation baseSnr subSnr stream,
         _channel        = CH.initChannel noiseGen
     }
 
@@ -127,6 +127,8 @@ forceStats = do
     !_trans <- use transmitted
     !_gener <- use totalGenerated
     !_nconf <- use nConflicts
+    !_lenConf <- use lenConf
+    !_curConflictLen <- use curConflictLen
     return ()
 
 
@@ -136,18 +138,18 @@ stepMessageGenerator = do
     total <- use totalGenerated
     totalGenerated += numNewMsgs
     -- stream of messages with UIDs from 0 to infty
-    -- let newMessages = take numNewMsgs $ map newMsg [total + 1..]
-    -- appendAll pendingMsgs newMessages
-    -- pendingMsgs %= map tick
+    let newMessages = take numNewMsgs $ map newMsg [total + 1..]
+    appendAll pendingMsgs newMessages
+    pendingMsgs %= map tick
 
 
 startNewConflict :: PoissonModel ()
 startNewConflict = do
-    -- pending <- use pendingMsgs
+    pending <- use pendingMsgs
     pendingMsgs .= []
-    nC <- use nConf
-    activeMsgs .= take nC (map newMsg [0..])
-    -- activeMsgs .= pending
+--     nC <- use nConf
+--     activeMsgs .= take nC (map newMsg [0..])
+    activeMsgs .= pending
 
     -- users <- mapM newUser pending
     users <- mapM newUser =<< use activeMsgs
