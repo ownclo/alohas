@@ -100,14 +100,14 @@ stepStationInternal input = do
         Just _ -> error "leftUndef is not undef, impossible"
 
 stepLeftNode :: ForwSignal -> StationTree -> State Station (Maybe UserID)
--- stepLeftNode input (Just (Undef broLabel (parentInput, _mParentNoise))) = do
---     subSnr <- use subtractSNR
---     let broSignal = subtract parentInput input subSnr
---     isError <- if isEmptyInput input then return True else genIsError broSignal
---     tree %= modifyNodeFromLabel broLabel (parentInput, Just isError)
---     return $ maybeReconstruct isError broSignal
--- stepLeftNode _ other = error $ show other
-stepLeftNode _ _ = return Nothing
+stepLeftNode input (Just (Undef broLabel (parentInput, _mParentNoise))) = do
+    subSnr <- use subtractSNR
+    let broSignal = subtract parentInput input subSnr
+    isError <- if isEmptyInput input then return True else genIsError broSignal
+    tree %= modifyNodeFromLabel broLabel (parentInput, Just isError)
+    return $ maybeReconstruct isError broSignal
+stepLeftNode _ other = error $ show other
+-- stepLeftNode _ _ = return Nothing
 
 stepRightNode :: Bool -> ForwSignal -> StationTree -> State Station StepResult
 stepRightNode = stepRightNodeNoiseElimination
@@ -132,15 +132,18 @@ stepRightNodeNoiseElimination _qs _inp mt = do
         let left = eliminateNoiseOnBrother subSnr brother
             Just (Undef _curLabel (parent, curIsError)) = leftUndef =<< mt
             brother = bro mt
-        newIsError <- if isEmptyInput left then return True else genIsError left
-        let restored = subtract parent left subSnr
-            -- XXX: if curIsError is present, we must use it.
-            isError = case curIsError of
-                          -- Just True -> newIsError
-                          -- Just False -> False
+            restored = subtract parent left subSnr
+
+        newIsError <- if isEmptyInput left then return True else genIsError restored
+
+        -- XXX: if curIsError is present, we must use it.
+        let isError = case curIsError of
+                          Just True -> newIsError
+                          Just False -> False
                           Nothing -> newIsError
-                          _ -> error "curIsError is not nothing!"
+                          -- _ -> error "curIsError is not nothing!"
             mReconstruct = maybeReconstruct isError restored
+
         return (False, mReconstruct, recvMsgs isError restored, (restored, Nothing))
 
 -- XXX: works only if currentNode is RIGHT
