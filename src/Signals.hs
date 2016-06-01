@@ -21,11 +21,11 @@ getNoise (ForwSignal _ n) = n
 
 probErrorSignal :: ForwSignal -> Double -> Integer -> Double
 probErrorSignal (ForwSignal _ 0.0) _baseSnr _l = 0.0
-probErrorSignal (ForwSignal _ 1.0) baseSnr l = probError baseSnr l
-probErrorSignal (ForwSignal _ 2.0) baseSnr l = probError (baseSnr / 2.0) l
--- probErrorSignal (ForwSignal _ n) baseSnr l = probError snr l
---     where snr = baseSnr / n
-probErrorSignal f _ _ = error $ "IMPOSSIBLE! " ++ show f
+-- probErrorSignal (ForwSignal _ 1.0) baseSnr l = probError baseSnr l
+-- probErrorSignal (ForwSignal _ 2.0) baseSnr l = probError (baseSnr / 2.0) l
+probErrorSignal (ForwSignal _ n) baseSnr l = probError snr l
+  where snr = baseSnr / n
+-- probErrorSignal f _ _ = error $ "IMPOSSIBLE! " ++ show f
 
 
 probError :: Double -> Integer -> Double

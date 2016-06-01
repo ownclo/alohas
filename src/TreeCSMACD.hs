@@ -17,6 +17,7 @@ module TreeCSMACD
 
     -- Noise elimination
     , successLeafs
+    , getPayload
 
     -- testing
     ,treeFromResults
@@ -168,3 +169,9 @@ modifyNode a (ELeaf lbl _) = ELeaf lbl a
 modifyNode a (SLeaf lbl _) = SLeaf lbl a
 modifyNode a (Undef lbl _) = Undef lbl a
 modifyNode a (CNode lbl _ l r) = CNode lbl a l r
+
+getPayload :: Tree a -> a
+getPayload (ELeaf _ a) = a
+getPayload (Undef _ a) = a
+getPayload (SLeaf _ a) = a
+getPayload (CNode _ a _ _) = a

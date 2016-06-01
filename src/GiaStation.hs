@@ -17,6 +17,7 @@ import Control.Exception.Base( assert )
 import Control.Lens
 import Control.Monad.State.Strict
 import Data.List( foldl' )
+import Data.Maybe( fromJust )
 
 import Interface( ForwSignal(..)
                 , ForwMsg(..)
@@ -28,7 +29,7 @@ import Interface( ForwSignal(..)
 import TreeCSMACD
 import Prelude hiding( subtract )
 import Signals
-import Common( roll )
+import Common( roll, isSuccess )
 
 
 type IsError = Bool
@@ -100,14 +101,14 @@ stepStationInternal input = do
         Just _ -> error "leftUndef is not undef, impossible"
 
 stepLeftNode :: ForwSignal -> StationTree -> State Station (Maybe UserID)
-stepLeftNode input (Just (Undef broLabel (parentInput, _mParentNoise))) = do
-    subSnr <- use subtractSNR
-    let broSignal = subtract parentInput input subSnr
-    isError <- if isEmptyInput input then return True else genIsError broSignal
-    tree %= modifyNodeFromLabel broLabel (parentInput, Just isError)
-    return $ maybeReconstruct isError broSignal
-stepLeftNode _ other = error $ show other
--- stepLeftNode _ _ = return Nothing
+-- stepLeftNode input (Just (Undef broLabel (parentInput, _mParentNoise))) = do
+--     subSnr <- use subtractSNR
+--     let broSignal = subtract parentInput input subSnr
+--     isError <- if isEmptyInput input then return True else genIsError broSignal
+--     tree %= modifyNodeFromLabel broLabel (parentInput, Just isError)
+--     return $ maybeReconstruct isError broSignal
+-- stepLeftNode _ other = error $ show other
+stepLeftNode _ _ = return Nothing
 
 stepRightNode :: Bool -> ForwSignal -> StationTree -> State Station StepResult
 stepRightNode = stepRightNodeNoiseElimination
@@ -130,9 +131,12 @@ stepRightNodeNoiseElimination :: Bool -> ForwSignal -> StationTree -> State Stat
 stepRightNodeNoiseElimination _qs _inp mt = do
         subSnr <- use subtractSNR
         let left = eliminateNoiseOnBrother subSnr brother
+            leftDirty = fst . getPayload . fromJust $ brother
+
             Just (Undef _curLabel (parent, curIsError)) = leftUndef =<< mt
             brother = bro mt
             restored = subtract parent left subSnr
+            restoredDirty = subtract parent leftDirty subSnr
 
         newIsError <- if isEmptyInput left then return True else genIsError restored
 
@@ -141,10 +145,20 @@ stepRightNodeNoiseElimination _qs _inp mt = do
                           Just True -> newIsError
                           Just False -> False
                           Nothing -> newIsError
-                          -- _ -> error "curIsError is not nothing!"
-            mReconstruct = maybeReconstruct isError restored
 
-        return (False, mReconstruct, recvMsgs isError restored, (restored, Nothing))
+            mReconstruct = maybeReconstruct isError restored
+            resLeft = recvMsgs newIsError restored
+            resLeftDirty = recvMsgs (fromJust curIsError) restoredDirty
+
+            isDirtyOk = isSuccess resLeftDirty
+            isCleanOk = isSuccess resLeft
+
+            -- toStore = if isCleanOk then restored else restoredDirty
+            toStore = restored
+            -- result = if isCleanOk then resLeft else resLeftDirty
+            result = resLeft
+
+        return (False, mReconstruct, result, (toStore, Nothing))
 
 -- XXX: works only if currentNode is RIGHT
 bro :: StationTree -> StationTree
